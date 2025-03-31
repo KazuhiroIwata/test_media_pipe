@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>顔姿勢検知と自動撮影アプリ</title>
+    <!-- MediaPipe Face Mesh -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 100%;
+            padding: 20px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin-bottom: 20px;
+        }
+        #input-video {
+            width: 100%;
+            border-radius: 8px;
+            background-color: #000;
+        }
+        #output-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+        }
+        .status-panel {
+            width: 100%;
+            max-width: 640px;
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status-text {
+            font-size: 18px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .pose-info {
+            font-size: 14px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .threshold-controls {
+            margin-top: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .threshold-control {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .threshold-control label {
+            flex: 1;
+        }
+        .threshold-control input {
+            flex: 2;
+        }
+        .threshold-control span {
+            flex: 0.5;
+            text-align: right;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        button {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            background-color: #0066cc;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            min-width: 140px;
+        }
+        button:disabled {
+            background-color: #cccccc;
+        }
+        button:hover:not(:disabled) {
+            background-color: #0055aa;
+        }
+        .mode-button {
+            background-color: #4CAF50;
+        }
+        .mode-button:hover:not(:disabled) {
+            background-color: #3e8e41;
+        }
+        .capture-button {
+            background-color: #f44336;
+        }
+        .capture-button:hover:not(:disabled) {
+            background-color: #d32f2f;
+        }
+        .gallery {
+            width: 100%;
+            max-width: 640px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .gallery-item {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .gallery-item h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        .gallery-image {
+            width: 100%;
+            border-radius: 4px;
+        }
+        .recorded-video {
+            width: 100%;
+            border-radius: 4px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #4CAF50;
+            width: 0%;
+            transition: width 0.1s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>顔姿勢検知と自動撮影アプリ</h1>
+        
+        <div class="video-container">
+            <video id="input-video" autoplay playsinline></video>
+            <canvas id="output-canvas"></canvas>
+        </div>
+        
+        <div class="status-panel">
+            <div class="status-text" id="status-text">準備中...</div>
+            <div class="pose-info" id="pose-info">姿勢情報: 検出中...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div class="threshold-controls">
+                <div class="threshold-control">
+                    <label for="roll-threshold">ロール許容値 (横傾き):</label>
+                    <input type="range" id="roll-threshold" min="0" max="10" value="5" step="1">
+                    <span id="roll-threshold-value">5°</span>
+                </div>
+                <div class="threshold-control">
+                    <label for="pitch-threshold">ピッチ許容値 (縦傾き):</label>
+                    <input type="range" id="pitch-threshold" min="0" max="10" value="5" step="1">
+                    <span id="pitch-threshold-value">5°</span>
+                </div>
+                <div class="threshold-control">
+                    <label for="yaw-threshold">ヨー許容値 (横向き):</label>
+                    <input type="range" id="yaw-threshold" min="0" max="10" value="5" step="1">
+                    <span id="yaw-threshold-value">5°</span>
+                </div>
+                <div class="threshold-control">
+                    <label for="stability-time">安定時間 (秒):</label>
+                    <input type="range" id="stability-time" min="0.1" max="1.0" value="0.5" step="0.1">
+                    <span id="stability-time-value">0.5秒</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="start-btn" class="mode-button">開始</button>
+            <button id="switch-camera-btn" disabled>カメラ切替</button>
+            <button id="manual-capture-btn" class="capture-button" disabled>手動キャプチャ</button>
+        </div>
+        
+        <div class="gallery">
+            <div class="gallery-item" id="before-capture" style="display: none;">
+                <h3>ビフォー撮影</h3>
+                <img id="before-image" class="gallery-image" src="" alt="ビフォー画像">
+            </div>
+            
+            <div class="gallery-item" id="video-capture" style="display: none;">
+                <h3>動画撮影</h3>
+                <video id="recorded-video" class="recorded-video" controls></video>
+                <a id="download-link" href="#" download="recorded-video.webm" style="display: block; margin-top: 10px;">ダウンロード</a>
+            </div>
+            
+            <div class="gallery-item" id="after-capture" style="display: none;">
+                <h3>アフター撮影</h3>
+                <img id="after-image" class="gallery-image" src="" alt="アフター画像">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // モード定義
+        const MODE = {
+            IDLE: 'idle',
+            BEFORE: 'before',
+            RECORDING: 'recording',
+            AFTER: 'after',
+            COMPLETED: 'completed'
+        };
+
+        // DOM要素
+        const inputVideo = document.getElementById('input-video');
+        const outputCanvas = document.getElementById('output-canvas');
+        const statusText = document.getElementById('status-text');
+        const poseInfo = document.getElementById('pose-info');
+        const progressFill = document.getElementById('progress-fill');
+        const startBtn = document.getElementById('start-btn');
+        const switchCameraBtn = document.getElementById('switch-camera-btn');
+        const manualCaptureBtn = document.getElementById('manual-capture-btn');
+        const beforeCapture = document.getElementById('before-capture');
+        const beforeImage = document.getElementById('before-image');
+        const videoCapture = document.getElementById('video-capture');
+        const recordedVideo = document.getElementById('recorded-video');
+        const downloadLink = document.getElementById('download-link');
+        const afterCapture = document.getElementById('after-capture');
+        const afterImage = document.getElementById('after-image');
+
+        // スライダー要素
+        const rollThreshold = document.getElementById('roll-threshold');
+        const pitchThreshold = document.getElementById('pitch-threshold');
+        const yawThreshold = document.getElementById('yaw-threshold');
+        const stabilityTime = document.getElementById('stability-time');
+        const rollThresholdValue = document.getElementById('roll-threshold-value');
+        const pitchThresholdValue = document.getElementById('pitch-threshold-value');
+        const yawThresholdValue = document.getElementById('yaw-threshold-value');
+        const stabilityTimeValue = document.getElementById('stability-time-value');
+
+        // グローバル変数
+        let currentMode = MODE.IDLE;
+        let camera;
+        let faceMesh;
+        let canvasCtx;
+        let stream;
+        let mediaRecorder;
+        let recordedChunks = [];
+        let isFrontCamera = true;
+        let faceDetected = false;
+        let facePose = { roll: 0, pitch: 0, yaw: 0 };
+        let stableStartTime = null;
+        let stablePosition = false;
+
+        // 初期化
+        function init() {
+            canvasCtx = outputCanvas.getContext('2d');
+            
+            // スライダーイベントリスナー
+            rollThreshold.addEventListener('input', updateThresholdValue);
+            pitchThreshold.addEventListener('input', updateThresholdValue);
+            yawThreshold.addEventListener('input', updateThresholdValue);
+            stabilityTime.addEventListener('input', updateThresholdValue);
+            
+            // ボタンイベントリスナー
+            startBtn.addEventListener('click', startProcess);
+            switchCameraBtn.addEventListener('click', switchCamera);
+            manualCaptureBtn.addEventListener('click', manualCapture);
+            
+            // 初期値表示
+            updateThresholdValue();
+            
+            // MediaPipe Face Mesh の初期化
+            faceMesh = new FaceMesh({
+                locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+                }
+            });
+            
+            faceMesh.setOptions({
+                maxNumFaces: 1,
+                refineLandmarks: true,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+            
+            faceMesh.onResults(onResults);
+        }
+
+        // スライダー値の更新
+        function updateThresholdValue() {
+            rollThresholdValue.textContent = `${rollThreshold.value}°`;
+            pitchThresholdValue.textContent = `${pitchThreshold.value}°`;
+            yawThresholdValue.textContent = `${yawThreshold.value}°`;
+            stabilityTimeValue.textContent = `${stabilityTime.value}秒`;
+        }
+
+        // カメラ開始
+        async function startCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            
+            const constraints = {
+                video: {
+                    facingMode: isFrontCamera ? 'user' : 'environment',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
+            };
+            
+            try {
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                inputVideo.srcObject = stream;
+                
+                // キャンバスサイズの設定
+                outputCanvas.width = inputVideo.videoWidth || 640;
+                outputCanvas.height = inputVideo.videoHeight || 480;
+                
+                // MediaPipe Camera Utilsの設定
+                camera = new Camera(inputVideo, {
+                    onFrame: async () => {
+                        await faceMesh.send({ image: inputVideo });
+                    },
+                    width: constraints.video.width.ideal,
+                    height: constraints.video.height.ideal
+                });
+                
+                camera.start();
+                switchCameraBtn.disabled = false;
+                
+                return true;
+            } catch (err) {
+                console.error('カメラの起動に失敗しました:', err);
+                statusText.textContent = 'カメラの起動に失敗しました: ' + err.message;
+                return false;
+            }
+        }
+
+        // カメラ切り替え
+        async function switchCamera() {
+            isFrontCamera = !isFrontCamera;
+            await startCamera();
+        }
+
+        // 処理開始
+        async function startProcess() {
+            if (currentMode === MODE.IDLE) {
+                // カメラの起動
+                const success = await startCamera();
+                if (!success) return;
+                
+                // ビフォーモードに移行
+                currentMode = MODE.BEFORE;
+                statusText.textContent = 'ビフォー撮影モード: 正面を向いてください';
+                startBtn.textContent = 'キャンセル';
+                manualCaptureBtn.disabled = false;
+            } else if (currentMode === MODE.BEFORE) {
+                // キャンセル処理
+                resetApp();
+            } else if (currentMode === MODE.RECORDING) {
+                // 録画停止
+                stopRecording();
+                
+                // アフターモードに移行
+                currentMode = MODE.AFTER;
+                statusText.textContent = 'アフター撮影モード: 正面を向いてください';
+                startBtn.textContent = 'キャンセル';
+                manualCaptureBtn.disabled = false;
+            } else if (currentMode === MODE.AFTER || currentMode === MODE.COMPLETED) {
+                // アプリのリセット
+                resetApp();
+            }
+        }
+        
+        // アプリのリセット
+        function resetApp() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            
+            if (camera) {
+                camera.stop();
+            }
+            
+            currentMode = MODE.IDLE;
+            statusText.textContent = '準備中...';
+            poseInfo.textContent = '姿勢情報: 検出中...';
+            progressFill.style.width = '0%';
+            
+            startBtn.textContent = '開始';
+            switchCameraBtn.disabled = true;
+            manualCaptureBtn.disabled = true;
+            
+            beforeCapture.style.display = 'none';
+            videoCapture.style.display = 'none';
+            afterCapture.style.display = 'none';
+            
+            stableStartTime = null;
+            stablePosition = false;
+            faceDetected = false;
+        }
+        
+        // MediaPipe結果処理
+        function onResults(results) {
+            // キャンバスをクリア
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+            
+            // 入力画像を描画（ミラーリングなし - 実際の動きと同じに）
+            canvasCtx.drawImage(results.image, 0, 0, outputCanvas.width, outputCanvas.height);
+            canvasCtx.restore();
+            
+            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                faceDetected = true;
+                
+                // 顔のランドマークを描画
+                for (const landmarks of results.multiFaceLandmarks) {
+                    drawConnectors(canvasCtx, landmarks, FACEMESH_TESSELATION, 
+                                  {color: '#C0C0C070', lineWidth: 1});
+                    drawConnectors(canvasCtx, landmarks, FACEMESH_RIGHT_EYE, 
+                                  {color: '#FF3030', lineWidth: 2});
+                    drawConnectors(canvasCtx, landmarks, FACEMESH_RIGHT_EYEBROW, 
+                                  {color: '#FF3030', lineWidth: 2});
+                    drawConnectors(canvasCtx, landmarks, FACEMESH_LEFT_EYE, 
+                                  {color: '#30FF30', lineWidth: 2});
+                    drawConnectors(canvasCtx, landmarks, FACEMESH_LEFT_EYEBROW, 
+                                  {color: '#30FF30', lineWidth: 2});
+                    drawConnectors(canvasCtx, landmarks, FACEMESH_FACE_OVAL, 
+                                  {color: '#E0E0E0', lineWidth: 2});
+                    drawConnectors(canvasCtx, landmarks, FACEMESH_LIPS, 
+                                  {color: '#E0E0E0', lineWidth: 2});
+                }
+                
+                // 顔の姿勢を計算
+                calculateFacePose(results.multiFaceLandmarks[0]);
+                
+                // 3軸の表示
+                drawPoseAxes(results.multiFaceLandmarks[0]);
+                
+                // 姿勢情報を表示
+                poseInfo.textContent = `姿勢情報: ロール: ${facePose.roll.toFixed(1)}°, ピッチ: ${facePose.pitch.toFixed(1)}°, ヨー: ${facePose.yaw.toFixed(1)}°`;
+                
+                // 姿勢が正面に近いかチェック
+                checkFrontFacing();
+            } else {
+                faceDetected = false;
+                stableStartTime = null;
+                stablePosition = false;
+                progressFill.style.width = '0%';
+                poseInfo.textContent = '姿勢情報: 顔が検出されていません';
+            }
+        }
+        
+        // 顔の姿勢計算
+        function calculateFacePose(landmarks) {
+            // 特徴点の取得
+            const nose = landmarks[1];
+            const leftEye = landmarks[33];
+            const rightEye = landmarks[263];
+            const leftMouth = landmarks[61];
+            const rightMouth = landmarks[291];
+            
+            // ロール（Z軸回転）- 目の傾き - カメラ非ミラーリングに対応
+            const eyeDiffY = rightEye.y - leftEye.y; // 左右反転
+            const eyeDiffX = rightEye.x - leftEye.x; // 左右反転
+            facePose.roll = Math.atan2(eyeDiffY, eyeDiffX) * 180 / Math.PI;
+            
+            // ピッチ（X軸回転）- 縦方向の傾き
+            const mouthCenter = {
+                y: (leftMouth.y + rightMouth.y) / 2
+            };
+            const eyeCenter = {
+                y: (leftEye.y + rightEye.y) / 2
+            };
+            const eyeToMouthDist = mouthCenter.y - eyeCenter.y;
+            // 基準値を調整して正面時にゼロに近くなるように
+            facePose.pitch = (eyeToMouthDist - 0.17) * 150;
+            
+            // ヨー（Y軸回転）- 横方向の向き - カメラ非ミラーリングに対応
+            const eyeMidPoint = {
+                x: (leftEye.x + rightEye.x) / 2
+            };
+            const noseMidOffset = eyeMidPoint.x - nose.x; // 反転
+            facePose.yaw = noseMidOffset * 500;
+        }
+        
+        // 3軸表示
+        function drawPoseAxes(landmarks) {
+            const nose = landmarks[1];
+            const scale = 0.1; // 軸の長さ
+            
+            // 座標軸の描画（鼻から伸びる3軸）
+            const noseX = nose.x * outputCanvas.width;
+            const noseY = nose.y * outputCanvas.height;
+            const noseZ = nose.z * outputCanvas.width;
+            
+            // X軸（赤）- ロール（向きを反転）
+            const rotationZ = facePose.roll * Math.PI / 180;
+            const xAxisX = noseX - Math.cos(rotationZ) * scale * outputCanvas.width;
+            const xAxisY = noseY - Math.sin(rotationZ) * scale * outputCanvas.width;
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(noseX, noseY);
+            canvasCtx.lineTo(xAxisX, xAxisY);
+            canvasCtx.strokeStyle = 'red';
+            canvasCtx.lineWidth = 3;
+            canvasCtx.stroke();
+            
+            // Y軸（緑）- ピッチ（上方向に変更）
+            const yAxisY = noseY - Math.cos(facePose.pitch * Math.PI / 180) * scale * 1.2 * outputCanvas.height;
+            const yAxisZ = noseZ - Math.sin(facePose.pitch * Math.PI / 180) * scale * 1.2 * outputCanvas.height;
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(noseX, noseY);
+            canvasCtx.lineTo(noseX, yAxisY);
+            canvasCtx.strokeStyle = 'green';
+            canvasCtx.lineWidth = 3;
+            canvasCtx.stroke();
+            
+            // Z軸（青）- ヨー（向きを反転 - 画面から顔方向に向かう方向）
+            const zAxisX = noseX - Math.sin(facePose.yaw * Math.PI / 180) * scale * outputCanvas.width;
+            const zAxisZ = noseZ - Math.cos(facePose.yaw * Math.PI / 180) * scale * outputCanvas.width;
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(noseX, noseY);
+            canvasCtx.lineTo(zAxisX, noseY);
+            canvasCtx.strokeStyle = 'blue';
+            canvasCtx.lineWidth = 3;
+            canvasCtx.stroke();
+        }
+        
+        // 正面向きチェック
+        function checkFrontFacing() {
+            // 現在のしきい値を取得
+            const rollThresholdVal = parseInt(rollThreshold.value);
+            const pitchThresholdVal = parseInt(pitchThreshold.value);
+            const yawThresholdVal = parseInt(yawThreshold.value);
+            const stabilityTimeVal = parseFloat(stabilityTime.value);
+            
+            // 正面条件のチェック
+            const isFrontFacing = 
+                Math.abs(facePose.roll) < rollThresholdVal &&
+                Math.abs(facePose.pitch) < pitchThresholdVal &&
+                Math.abs(facePose.yaw) < yawThresholdVal;
+            
+            if (isFrontFacing) {
+                if (!stableStartTime) {
+                    stableStartTime = Date.now();
+                }
+                
+                const elapsedTime = (Date.now() - stableStartTime) / 1000;
+                const progressPercent = (elapsedTime / stabilityTimeVal) * 100;
+                progressFill.style.width = `${Math.min(progressPercent, 100)}%`;
+                
+                // しきい値に達した場合の処理
+                if (elapsedTime >= stabilityTimeVal && !stablePosition) {
+                    progressFill.style.width = '100%';
+                    stablePosition = true;
+                    
+                    // モードに応じた自動キャプチャ
+                    if (currentMode === MODE.BEFORE && beforeCapture.style.display === 'none') {
+                        captureBeforeImage();
+                    } else if (currentMode === MODE.AFTER && afterCapture.style.display === 'none') {
+                        captureAfterImage();
+                    }
+                }
+            } else {
+                stableStartTime = null;
+                stablePosition = false;
+                progressFill.style.width = '0%';
+            }
+        }
+        
+        // ビフォー画像の撮影
+        function captureBeforeImage() {
+            // キャンバスから画像を取得
+            const imageData = outputCanvas.toDataURL('image/jpeg');
+            beforeImage.src = imageData;
+            beforeCapture.style.display = 'block';
+            
+            // 自動キャプチャ完了のフィードバック
+            statusText.textContent = 'ビフォー撮影完了！動画撮影モードに移行します...';
+            
+            // 少し遅延を入れて録画モードに移行（視覚的フィードバック用）
+            setTimeout(() => {
+                // 録画モードに移行
+                currentMode = MODE.RECORDING;
+                statusText.textContent = '動画撮影モード: 録画を開始します';
+                startBtn.textContent = '録画終了';
+                manualCaptureBtn.disabled = true;
+                
+                // 録画開始
+                startRecording();
+            }, 1000);
+        }
+        
+        // アフター画像の撮影
+        function captureAfterImage() {
+            // キャンバスから画像を取得
+            const imageData = outputCanvas.toDataURL('image/jpeg');
+            afterImage.src = imageData;
+            afterCapture.style.display = 'block';
+            
+            // 自動キャプチャ完了のフィードバック
+            statusText.textContent = 'アフター撮影完了！';
+            
+            // 完了モードに移行
+            currentMode = MODE.COMPLETED;
+            setTimeout(() => {
+                statusText.textContent = '撮影完了！ビフォー/アフター比較ができます';
+            }, 1000);
+            
+            startBtn.textContent = '最初から';
+            manualCaptureBtn.disabled = true;
+            
+            // ビフォーとアフター画像が揃ったことをユーザーに通知
+            const notification = document.createElement('div');
+            notification.style.position = 'fixed';
+            notification.style.top = '50%';
+            notification.style.left = '50%';
+            notification.style.transform = 'translate(-50%, -50%)';
+            notification.style.backgroundColor = 'rgba(0, 150, 0, 0.8)';
+            notification.style.color = 'white';
+            notification.style.padding = '20px';
+            notification.style.borderRadius = '10px';
+            notification.style.zIndex = '1000';
+            notification.textContent = '撮影完了！';
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 2000);
+        }
+        
+        // 手動キャプチャ
+        function manualCapture() {
+            if (currentMode === MODE.BEFORE) {
+                captureBeforeImage();
+            } else if (currentMode === MODE.AFTER) {
+                captureAfterImage();
+            }
+        }
+        
+        // 録画開始
+        function startRecording() {
+            recordedChunks = [];
+            
+            const options = { 
+                mimeType: 'video/webm;codecs=vp9,opus',
+                videoBitsPerSecond: 2500000 
+            };
+            
+            try {
+                mediaRecorder = new MediaRecorder(stream, options);
+            } catch (e) {
+                console.error('このコーデックはサポートされていません:', e);
+                try {
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus' });
+                } catch (e2) {
+                    try {
+                        mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                    } catch (e3) {
+                        try {
+                            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/mp4' });
+                        } catch (e4) {
+                            console.error('録画がサポートされていません:', e4);
+                            statusText.textContent = '録画機能がサポートされていません';
+                            return;
+                        }
+                    }
+                }
+            }
+            
+            mediaRecorder.ondataavailable = function(event) {
+                if (event.data.size > 0) {
+                    recordedChunks.push(event.data);
+                }
+            };
+            
+            mediaRecorder.onstop = function() {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                recordedVideo.src = url;
+                downloadLink.href = url;
+                videoCapture.style.display = 'block';
+            };
+            
+            mediaRecorder.start(100);
+        }
+        
+        // 録画停止
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+        }
+        
+        // ウィンドウ読み込み時の初期化
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
