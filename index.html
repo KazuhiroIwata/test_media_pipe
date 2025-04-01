@@ -43,6 +43,17 @@
             height: 100%;
             border-radius: 8px;
         }
+        .countdown {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 18px;
+            font-weight: bold;
+        }
         .status-panel {
             width: 100%;
             max-width: 640px;
@@ -135,9 +146,28 @@
             margin-top: 0;
             margin-bottom: 10px;
         }
-        .gallery-image {
-            width: 100%;
+        .captures-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        .capture-item {
+            position: relative;
+            border: 1px solid #ddd;
             border-radius: 4px;
+            padding: 5px;
+        }
+        .capture-item.best {
+            border: 3px solid #f44336;
+        }
+        .capture-image {
+            width: 100%;
+            border-radius: 2px;
+        }
+        .capture-info {
+            font-size: 12px;
+            margin-top: 5px;
+            text-align: center;
         }
         .recorded-video {
             width: 100%;
@@ -166,6 +196,7 @@
         <div class="video-container">
             <video id="input-video" autoplay playsinline></video>
             <canvas id="output-canvas"></canvas>
+            <div id="countdown" class="countdown" style="display: none;">5:00</div>
         </div>
         
         <div class="status-panel">
@@ -200,14 +231,15 @@
         
         <div class="controls">
             <button id="start-btn" class="mode-button">開始</button>
+            <button id="preview-btn" class="mode-button" disabled>プレビュー開始</button>
             <button id="switch-camera-btn" disabled>カメラ切替</button>
             <button id="manual-capture-btn" class="capture-button" disabled>手動キャプチャ</button>
         </div>
         
         <div class="gallery">
-            <div class="gallery-item" id="before-capture" style="display: none;">
+            <div class="gallery-item" id="before-captures" style="display: none;">
                 <h3>ビフォー撮影</h3>
-                <img id="before-image" class="gallery-image" src="" alt="ビフォー画像">
+                <div class="captures-grid" id="before-grid"></div>
             </div>
             
             <div class="gallery-item" id="video-capture" style="display: none;">
@@ -216,9 +248,9 @@
                 <a id="download-link" href="#" download="recorded-video.webm" style="display: block; margin-top: 10px;">ダウンロード</a>
             </div>
             
-            <div class="gallery-item" id="after-capture" style="display: none;">
+            <div class="gallery-item" id="after-captures" style="display: none;">
                 <h3>アフター撮影</h3>
-                <img id="after-image" class="gallery-image" src="" alt="アフター画像">
+                <div class="captures-grid" id="after-grid"></div>
             </div>
         </div>
     </div>
@@ -228,27 +260,31 @@
         const MODE = {
             IDLE: 'idle',
             BEFORE: 'before',
+            BEFORE_COMPLETED: 'before_completed',
             RECORDING: 'recording',
             AFTER: 'after',
+            AFTER_COMPLETED: 'after_completed',
             COMPLETED: 'completed'
         };
 
         // DOM要素
         const inputVideo = document.getElementById('input-video');
         const outputCanvas = document.getElementById('output-canvas');
+        const countdownEl = document.getElementById('countdown');
         const statusText = document.getElementById('status-text');
         const poseInfo = document.getElementById('pose-info');
         const progressFill = document.getElementById('progress-fill');
         const startBtn = document.getElementById('start-btn');
+        const previewBtn = document.getElementById('preview-btn');
         const switchCameraBtn = document.getElementById('switch-camera-btn');
         const manualCaptureBtn = document.getElementById('manual-capture-btn');
-        const beforeCapture = document.getElementById('before-capture');
-        const beforeImage = document.getElementById('before-image');
+        const beforeCaptures = document.getElementById('before-captures');
+        const beforeGrid = document.getElementById('before-grid');
         const videoCapture = document.getElementById('video-capture');
         const recordedVideo = document.getElementById('recorded-video');
         const downloadLink = document.getElementById('download-link');
-        const afterCapture = document.getElementById('after-capture');
-        const afterImage = document.getElementById('after-image');
+        const afterCaptures = document.getElementById('after-captures');
+        const afterGrid = document.getElementById('after-grid');
 
         // スライダー要素
         const rollThreshold = document.getElementById('roll-threshold');
@@ -273,6 +309,12 @@
         let facePose = { roll: 0, pitch: 0, yaw: 0 };
         let stableStartTime = null;
         let stablePosition = false;
+        let beforeCapturesCount = 0;
+        let afterCapturesCount = 0;
+        let beforeCapturesList = [];
+        let afterCapturesList = [];
+        let countdownInterval = null;
+        let countdownTimeLeft = 5 * 60; // 5分（秒単位）
 
         // 初期化
         function init() {
@@ -286,6 +328,7 @@
             
             // ボタンイベントリスナー
             startBtn.addEventListener('click', startProcess);
+            previewBtn.addEventListener('click', startPreview);
             switchCameraBtn.addEventListener('click', switchCamera);
             manualCaptureBtn.addEventListener('click', manualCapture);
             
@@ -374,25 +417,104 @@
                 
                 // ビフォーモードに移行
                 currentMode = MODE.BEFORE;
-                statusText.textContent = 'ビフォー撮影モード: 正面を向いてください';
+                statusText.textContent = 'ビフォー撮影モード: 正面を向いてください (1/5)';
                 startBtn.textContent = 'キャンセル';
+                previewBtn.disabled = true;
                 manualCaptureBtn.disabled = false;
-            } else if (currentMode === MODE.BEFORE) {
+                
+                // 準備
+                beforeCapturesCount = 0;
+                beforeCapturesList = [];
+                beforeGrid.innerHTML = '';
+                beforeCaptures.style.display = 'none';
+                
+            } else if (currentMode === MODE.BEFORE || currentMode === MODE.BEFORE_COMPLETED) {
                 // キャンセル処理
                 resetApp();
+                
             } else if (currentMode === MODE.RECORDING) {
                 // 録画停止
                 stopRecording();
+                stopCountdown();
                 
                 // アフターモードに移行
                 currentMode = MODE.AFTER;
-                statusText.textContent = 'アフター撮影モード: 正面を向いてください';
+                statusText.textContent = 'アフター撮影モード: 正面を向いてください (1/5)';
                 startBtn.textContent = 'キャンセル';
+                previewBtn.disabled = true;
                 manualCaptureBtn.disabled = false;
-            } else if (currentMode === MODE.AFTER || currentMode === MODE.COMPLETED) {
+                
+                // 準備
+                afterCapturesCount = 0;
+                afterCapturesList = [];
+                afterGrid.innerHTML = '';
+                afterCaptures.style.display = 'none';
+                
+            } else if (currentMode === MODE.AFTER || currentMode === MODE.AFTER_COMPLETED || currentMode === MODE.COMPLETED) {
                 // アプリのリセット
                 resetApp();
             }
+        }
+        
+        // プレビュー開始
+        function startPreview() {
+            if (currentMode === MODE.BEFORE_COMPLETED) {
+                // 録画モードに移行
+                currentMode = MODE.RECORDING;
+                statusText.textContent = '動画撮影モード: 5分間の録画を開始します';
+                startBtn.textContent = '撮影終了';
+                previewBtn.disabled = true;
+                manualCaptureBtn.disabled = true;
+                
+                // カウントダウン開始
+                startCountdown();
+                
+                // 録画開始
+                startRecording();
+            }
+        }
+        
+        // カウントダウン開始
+        function startCountdown() {
+            countdownTimeLeft = 5 * 60; // 5分（秒単位）
+            updateCountdownDisplay();
+            countdownEl.style.display = 'block';
+            
+            countdownInterval = setInterval(() => {
+                countdownTimeLeft--;
+                updateCountdownDisplay();
+                
+                if (countdownTimeLeft <= 0) {
+                    stopCountdown();
+                    stopRecording();
+                    
+                    // アフターモードに移行
+                    currentMode = MODE.AFTER;
+                    statusText.textContent = 'アフター撮影モード: 正面を向いてください (1/5)';
+                    startBtn.textContent = 'キャンセル';
+                    previewBtn.disabled = true;
+                    manualCaptureBtn.disabled = false;
+                    
+                    // 準備
+                    afterCapturesCount = 0;
+                    afterCapturesList = [];
+                    afterGrid.innerHTML = '';
+                    afterCaptures.style.display = 'none';
+                }
+            }, 1000);
+        }
+        
+        // カウントダウン停止
+        function stopCountdown() {
+            clearInterval(countdownInterval);
+            countdownEl.style.display = 'none';
+        }
+        
+        // カウントダウン表示更新
+        function updateCountdownDisplay() {
+            const minutes = Math.floor(countdownTimeLeft / 60);
+            const seconds = countdownTimeLeft % 60;
+            countdownEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         }
         
         // アプリのリセット
@@ -406,22 +528,29 @@
                 camera.stop();
             }
             
+            stopCountdown();
+            
             currentMode = MODE.IDLE;
             statusText.textContent = '準備中...';
             poseInfo.textContent = '姿勢情報: 検出中...';
             progressFill.style.width = '0%';
             
             startBtn.textContent = '開始';
+            previewBtn.disabled = true;
             switchCameraBtn.disabled = true;
             manualCaptureBtn.disabled = true;
             
-            beforeCapture.style.display = 'none';
+            beforeCaptures.style.display = 'none';
             videoCapture.style.display = 'none';
-            afterCapture.style.display = 'none';
+            afterCaptures.style.display = 'none';
             
             stableStartTime = null;
             stablePosition = false;
             faceDetected = false;
+            beforeCapturesCount = 0;
+            afterCapturesCount = 0;
+            beforeCapturesList = [];
+            afterCapturesList = [];
         }
         
         // MediaPipe結果処理
@@ -430,14 +559,15 @@
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
             
-            // 入力画像を描画（ミラーリングなし - 実際の動きと同じに）
+            // 入力画像を描画（ミラーリングして直感的な動きに）
+            canvasCtx.scale(-1, 1);
+            canvasCtx.translate(-outputCanvas.width, 0);
             canvasCtx.drawImage(results.image, 0, 0, outputCanvas.width, outputCanvas.height);
-            canvasCtx.restore();
             
             if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
                 faceDetected = true;
                 
-                // 顔のランドマークを描画
+                // 顔のランドマークを描画（ミラーリング状態で描画）
                 for (const landmarks of results.multiFaceLandmarks) {
                     drawConnectors(canvasCtx, landmarks, FACEMESH_TESSELATION, 
                                   {color: '#C0C0C070', lineWidth: 1});
@@ -458,15 +588,17 @@
                 // 顔の姿勢を計算
                 calculateFacePose(results.multiFaceLandmarks[0]);
                 
-                // 3軸の表示
+                // 3軸の表示（ミラーリング状態で描画）
                 drawPoseAxes(results.multiFaceLandmarks[0]);
                 
                 // 姿勢情報を表示
+                canvasCtx.restore(); // ミラーリングをリセット
                 poseInfo.textContent = `姿勢情報: ロール: ${facePose.roll.toFixed(1)}°, ピッチ: ${facePose.pitch.toFixed(1)}°, ヨー: ${facePose.yaw.toFixed(1)}°`;
                 
                 // 姿勢が正面に近いかチェック
                 checkFrontFacing();
             } else {
+                canvasCtx.restore(); // ミラーリングをリセット
                 faceDetected = false;
                 stableStartTime = null;
                 stablePosition = false;
@@ -484,10 +616,10 @@
             const leftMouth = landmarks[61];
             const rightMouth = landmarks[291];
             
-            // ロール（Z軸回転）- 目の傾き - カメラ非ミラーリングに対応
-            const eyeDiffY = rightEye.y - leftEye.y; // 左右反転
-            const eyeDiffX = rightEye.x - leftEye.x; // 左右反転
-            facePose.roll = Math.atan2(eyeDiffY, eyeDiffX) * 180 / Math.PI;
+            // ロール（Z軸回転）- 目の傾き - ミラーリング対応
+            const eyeDiffY = rightEye.y - leftEye.y; // 左右を入れ替え
+            const eyeDiffX = rightEye.x - leftEye.x; // 左右を入れ替え
+            facePose.roll = -Math.atan2(eyeDiffY, eyeDiffX) * 180 / Math.PI; // 符号を反転
             
             // ピッチ（X軸回転）- 縦方向の傾き
             const mouthCenter = {
@@ -500,21 +632,27 @@
             // 基準値を調整して正面時にゼロに近くなるように
             facePose.pitch = (eyeToMouthDist - 0.17) * 150;
             
-            // ヨー（Y軸回転）- 横方向の向き - カメラ非ミラーリングに対応
+            // ヨー（Y軸回転）- 横方向の向き - ミラーリング対応
             const eyeMidPoint = {
                 x: (leftEye.x + rightEye.x) / 2
             };
-            const noseMidOffset = eyeMidPoint.x - nose.x; // 反転
+            const noseMidOffset = eyeMidPoint.x - nose.x; // ミラーリングに合わせて方向反転
+            // ミラーリングに合わせて符号を調整
             facePose.yaw = noseMidOffset * 500;
         }
         
         // 3軸表示
         function drawPoseAxes(landmarks) {
+            // 鏡像表示に対応するための変換
+            canvasCtx.scale(-1, 1);
+            canvasCtx.translate(-outputCanvas.width, 0);
+            
             const nose = landmarks[1];
             const scale = 0.1; // 軸の長さ
             
             // 座標軸の描画（鼻から伸びる3軸）
-            const noseX = nose.x * outputCanvas.width;
+            // ミラーリング時の座標に変換
+            const noseX = (1 - nose.x) * outputCanvas.width;
             const noseY = nose.y * outputCanvas.height;
             const noseZ = nose.z * outputCanvas.width;
             
@@ -552,6 +690,18 @@
         
         // 正面向きチェック
         function checkFrontFacing() {
+            // 録画モード中は姿勢チェックをしない
+            if (currentMode === MODE.RECORDING) {
+                return;
+            }
+            
+            // ビフォーとアフターが完了していたら姿勢チェックしない
+            if (currentMode === MODE.BEFORE_COMPLETED || 
+                currentMode === MODE.AFTER_COMPLETED || 
+                currentMode === MODE.COMPLETED) {
+                return;
+            }
+            
             // 現在のしきい値を取得
             const rollThresholdVal = parseInt(rollThreshold.value);
             const pitchThresholdVal = parseInt(pitchThreshold.value);
@@ -579,9 +729,9 @@
                     stablePosition = true;
                     
                     // モードに応じた自動キャプチャ
-                    if (currentMode === MODE.BEFORE && beforeCapture.style.display === 'none') {
+                    if (currentMode === MODE.BEFORE && beforeCapturesCount < 5) {
                         captureBeforeImage();
-                    } else if (currentMode === MODE.AFTER && afterCapture.style.display === 'none') {
+                    } else if (currentMode === MODE.AFTER && afterCapturesCount < 5) {
                         captureAfterImage();
                     }
                 }
@@ -591,78 +741,161 @@
                 progressFill.style.width = '0%';
             }
         }
-        
+
         // ビフォー画像の撮影
         function captureBeforeImage() {
+            // 姿勢が安定した状態をリセット
+            stablePosition = false;
+            
             // キャンバスから画像を取得
             const imageData = outputCanvas.toDataURL('image/jpeg');
-            beforeImage.src = imageData;
-            beforeCapture.style.display = 'block';
             
-            // 自動キャプチャ完了のフィードバック
-            statusText.textContent = 'ビフォー撮影完了！動画撮影モードに移行します...';
+            // 撮影情報を保存
+            const captureInfo = {
+                image: imageData,
+                pitch: facePose.pitch,
+                yaw: facePose.yaw,
+                timestamp: new Date().toLocaleTimeString(),
+                deviation: Math.abs(facePose.pitch) + Math.abs(facePose.yaw) // 0からの偏差
+            };
             
-            // 少し遅延を入れて録画モードに移行（視覚的フィードバック用）
-            setTimeout(() => {
-                // 録画モードに移行
-                currentMode = MODE.RECORDING;
-                statusText.textContent = '動画撮影モード: 録画を開始します';
-                startBtn.textContent = '録画終了';
-                manualCaptureBtn.disabled = true;
+            beforeCapturesList.push(captureInfo);
+            beforeCapturesCount++;
+            
+            // 画像をUIに追加
+            addCaptureToGrid(captureInfo, beforeGrid, beforeCapturesCount);
+            beforeCaptures.style.display = 'block';
+            
+            if (beforeCapturesCount < 5) {
+                // 次の撮影に進む
+                statusText.textContent = `ビフォー撮影モード: 正面を向いてください (${beforeCapturesCount + 1}/5)`;
                 
-                // 録画開始
-                startRecording();
-            }, 1000);
+                // 安定時間を空けるために少し待機
+                setTimeout(() => {
+                    stableStartTime = null;
+                }, 500);
+            } else {
+                // 5枚撮影完了
+                findAndMarkBestCapture(beforeCapturesList, beforeGrid);
+                
+                // ビフォーモード完了
+                currentMode = MODE.BEFORE_COMPLETED;
+                statusText.textContent = 'ビフォー撮影完了！プレビュー開始ボタンを押してください';
+                previewBtn.disabled = false;
+                manualCaptureBtn.disabled = true;
+            }
         }
-        
+
         // アフター画像の撮影
         function captureAfterImage() {
+            // 姿勢が安定した状態をリセット
+            stablePosition = false;
+            
             // キャンバスから画像を取得
             const imageData = outputCanvas.toDataURL('image/jpeg');
-            afterImage.src = imageData;
-            afterCapture.style.display = 'block';
             
-            // 自動キャプチャ完了のフィードバック
-            statusText.textContent = 'アフター撮影完了！';
+            // 撮影情報を保存
+            const captureInfo = {
+                image: imageData,
+                pitch: facePose.pitch,
+                yaw: facePose.yaw,
+                timestamp: new Date().toLocaleTimeString(),
+                deviation: Math.abs(facePose.pitch) + Math.abs(facePose.yaw) // 0からの偏差
+            };
             
-            // 完了モードに移行
-            currentMode = MODE.COMPLETED;
-            setTimeout(() => {
+            afterCapturesList.push(captureInfo);
+            afterCapturesCount++;
+            
+            // 画像をUIに追加
+            addCaptureToGrid(captureInfo, afterGrid, afterCapturesCount);
+            afterCaptures.style.display = 'block';
+            
+            if (afterCapturesCount < 5) {
+                // 次の撮影に進む
+                statusText.textContent = `アフター撮影モード: 正面を向いてください (${afterCapturesCount + 1}/5)`;
+                
+                // 安定時間を空けるために少し待機
+                setTimeout(() => {
+                    stableStartTime = null;
+                }, 500);
+            } else {
+                // 5枚撮影完了
+                findAndMarkBestCapture(afterCapturesList, afterGrid);
+                
+                // すべて完了
+                currentMode = MODE.COMPLETED;
                 statusText.textContent = '撮影完了！ビフォー/アフター比較ができます';
-            }, 1000);
-            
-            startBtn.textContent = '最初から';
-            manualCaptureBtn.disabled = true;
-            
-            // ビフォーとアフター画像が揃ったことをユーザーに通知
-            const notification = document.createElement('div');
-            notification.style.position = 'fixed';
-            notification.style.top = '50%';
-            notification.style.left = '50%';
-            notification.style.transform = 'translate(-50%, -50%)';
-            notification.style.backgroundColor = 'rgba(0, 150, 0, 0.8)';
-            notification.style.color = 'white';
-            notification.style.padding = '20px';
-            notification.style.borderRadius = '10px';
-            notification.style.zIndex = '1000';
-            notification.textContent = '撮影完了！';
-            
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                document.body.removeChild(notification);
-            }, 2000);
+                startBtn.textContent = '最初から';
+                manualCaptureBtn.disabled = true;
+                
+                // ビフォーとアフター画像が揃ったことをユーザーに通知
+                const notification = document.createElement('div');
+                notification.style.position = 'fixed';
+                notification.style.top = '50%';
+                notification.style.left = '50%';
+                notification.style.transform = 'translate(-50%, -50%)';
+                notification.style.backgroundColor = 'rgba(0, 150, 0, 0.8)';
+                notification.style.color = 'white';
+                notification.style.padding = '20px';
+                notification.style.borderRadius = '10px';
+                notification.style.zIndex = '1000';
+                notification.textContent = '撮影完了！';
+                
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 2000);
+            }
         }
-        
+
+        // 撮影画像をグリッドに追加
+        function addCaptureToGrid(captureInfo, grid, index) {
+            const captureItem = document.createElement('div');
+            captureItem.className = 'capture-item';
+            captureItem.dataset.index = index - 1; // 0ベースインデックス
+            
+            const img = document.createElement('img');
+            img.className = 'capture-image';
+            img.src = captureInfo.image;
+            img.alt = `撮影 ${index}`;
+            
+            const info = document.createElement('div');
+            info.className = 'capture-info';
+            info.textContent = `P: ${captureInfo.pitch.toFixed(1)}°, Y: ${captureInfo.yaw.toFixed(1)}°`;
+            
+            captureItem.appendChild(img);
+            captureItem.appendChild(info);
+            grid.appendChild(captureItem);
+        }
+
+        // 最も良い撮影を見つけてマークする
+        function findAndMarkBestCapture(captures, grid) {
+            // 偏差が最小のものを見つける
+            let bestIndex = 0;
+            let minDeviation = captures[0].deviation;
+            
+            for (let i = 1; i < captures.length; i++) {
+                if (captures[i].deviation < minDeviation) {
+                    minDeviation = captures[i].deviation;
+                    bestIndex = i;
+                }
+            }
+            
+            // 最も良い撮影に赤枠を付ける
+            const items = grid.querySelectorAll('.capture-item');
+            items[bestIndex].classList.add('best');
+        }
+
         // 手動キャプチャ
         function manualCapture() {
-            if (currentMode === MODE.BEFORE) {
+            if (currentMode === MODE.BEFORE && beforeCapturesCount < 5) {
                 captureBeforeImage();
-            } else if (currentMode === MODE.AFTER) {
+            } else if (currentMode === MODE.AFTER && afterCapturesCount < 5) {
                 captureAfterImage();
             }
         }
-        
+
         // 録画開始
         function startRecording() {
             recordedChunks = [];
@@ -705,18 +938,23 @@
                 recordedVideo.src = url;
                 downloadLink.href = url;
                 videoCapture.style.display = 'block';
+                
+                // タイムスタンプを追加してファイル名をカスタマイズ
+                const now = new Date();
+                const timestamp = now.toISOString().replace(/[:.]/g, '-').substring(0, 19);
+                downloadLink.download = `recorded-video-${timestamp}.webm`;
             };
             
-            mediaRecorder.start(100);
+            mediaRecorder.start(1000); // 1秒ごとにデータを取得（ファイルサイズ管理のため）
         }
-        
+
         // 録画停止
         function stopRecording() {
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.stop();
             }
         }
-        
+
         // ウィンドウ読み込み時の初期化
         window.addEventListener('load', init);
     </script>
