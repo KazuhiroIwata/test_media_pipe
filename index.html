@@ -965,28 +965,26 @@
         function startRecording() {
             recordedChunks = [];
             
-            const options = { 
-                mimeType: 'video/webm;codecs=vp9,opus',
-                videoBitsPerSecond: 2500000 
-            };
-            
+            // コーデック優先順位をMP4優先に変更
+            let options;
             try {
+                // まずMP4（iPhoneに対応）を試す
+                options = { mimeType: 'video/mp4' };
                 mediaRecorder = new MediaRecorder(stream, options);
-            } catch (e) {
-                console.error('このコーデックはサポートされていません:', e);
+            } catch (e1) {
                 try {
-                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus' });
+                    // 次にwebm+vp8を試す
+                    options = { mimeType: 'video/webm;codecs=vp8,opus' };
+                    mediaRecorder = new MediaRecorder(stream, options);
                 } catch (e2) {
                     try {
-                        mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                        // 最後にコーデック指定なしのwebmを試す
+                        options = { mimeType: 'video/webm' };
+                        mediaRecorder = new MediaRecorder(stream, options);
                     } catch (e3) {
-                        try {
-                            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/mp4' });
-                        } catch (e4) {
-                            console.error('録画がサポートされていません:', e4);
-                            statusText.textContent = '録画機能がサポートされていません';
-                            return;
-                        }
+                        console.error('どの録画フォーマットもサポートされていません:', e3);
+                        statusText.textContent = '録画機能がサポートされていません';
+                        return;
                     }
                 }
             }
@@ -998,19 +996,26 @@
             };
             
             mediaRecorder.onstop = function() {
-                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                // MIMEタイプを取得
+                const mimeType = mediaRecorder.mimeType;
+                const isMP4 = mimeType.includes('mp4');
+                
+                // 適切な拡張子を選択
+                const fileExtension = isMP4 ? 'mp4' : 'webm';
+                
+                const blob = new Blob(recordedChunks, { type: mimeType });
                 const url = URL.createObjectURL(blob);
                 recordedVideo.src = url;
                 downloadLink.href = url;
                 videoCapture.style.display = 'block';
                 
-                // タイムスタンプを追加してファイル名をカスタマイズ
+                // タイムスタンプを追加してファイル名をカスタマイズ（拡張子を動的に変更）
                 const now = new Date();
                 const timestamp = now.toISOString().replace(/[:.]/g, '-').substring(0, 19);
-                downloadLink.download = `recorded-video-${timestamp}.webm`;
+                downloadLink.download = `recorded-video-${timestamp}.${fileExtension}`;
             };
             
-            mediaRecorder.start(1000); // 1秒ごとにデータを取得（ファイルサイズ管理のため）
+            mediaRecorder.start(1000); // 1秒ごとにデータを取得
         }
 
         // 録画停止
