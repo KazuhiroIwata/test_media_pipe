@@ -2272,8 +2272,8 @@
                     const screenMin = Math.min(outputCanvas.width, outputCanvas.height);
                     
                     // 楕円のサイズ - 横幅を広げる（50%に変更）、高さは縦長に（60%維持）
-                    const outlineWidth = screenMin * 0.5; // 画面の50%に広げる（元は40%）
-                    const outlineHeight = screenMin * 0.6; // 画面の60%維持
+                    const outlineWidth = screenMin * 0.7; // 画面の50%に広げる（元は40%）
+                    const outlineHeight = screenMin * 0.9; // 画面の60%維持
                     
                     // 楕円を描画
                     canvasCtx.beginPath();
@@ -2303,7 +2303,7 @@
                         originalCalculateFacePose(landmarks);
                         
                         // iPadではピッチ（タンガージュ）に+10度のオフセットを適用
-                        facePose.pitch = facePose.pitch - 10;
+                        facePose.pitch = facePose.pitch + 10;
                     };
                     console.log('Tangageのオフセット調整を適用しました');
                 }
