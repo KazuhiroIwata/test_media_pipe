@@ -370,11 +370,12 @@
     <div class="container">
         <div id="email-overlay" class="overlay" style="display: none;"></div>
         <div id="email-dialog" class="email-dialog" style="display: none;">
-            <h3>メールアドレスを入力してください</h3>
-            <p>データの保存とダウンロードのために必要です</p>
+            <h3>Entrez votre adresse e-mail</h3>
+            <p>L'enregistrement de votre adresse e-mail est nécessaire pour sauvegarder et télécharger les données.<br>
+            Email required to save and download data.</p>
             <input type="email" id="email-input" placeholder="例: example@example.com">
             <div class="privacy-policy-container">
-                <h4>プライバシーポリシー</h4>
+                <h2>Politique de confidentialité</h2>
                 <div class="privacy-policy-content">
                     <h2>Politique de confidentialité (Formulaire d'envoi de photo du visage)</h2>
                     <h3>Face Matrix Academia Co., Ltd. (ci-après « notre société ») traite les données personnelles obtenues dans le cadre du concours de techniques esthétiques qu'elle organise, conformément à la politique suivante.</h3>
@@ -424,7 +425,7 @@
             </div>
             <div class="privacy-checkbox">
                 <input type="checkbox" id="privacy-agree" required>
-                <label for="privacy-agree">プライバシーポリシーに同意します</label>
+                <label for="privacy-agree">J'accepte la politique de confidentialité</label>
             </div>
             <button id="email-submit" style="background-color: #4CAF50; width: 100%;" disabled>OK</button>
         </div>
@@ -441,8 +442,8 @@
         </div>
         
         <div class="status-panel">
-            <div class="status-text" id="status-text">準備中...</div>
-            <div class="pose-info" id="pose-info">姿勢情報: 検出中...</div>
+            <div class="status-text" id="status-text">Tap "1. Start 'Before' Photo" to begin.</div>
+            <div class="pose-info" id="pose-info"></div>
             <div class="progress-bar">
                 <div class="progress-fill" id="progress-fill"></div>
             </div>
@@ -451,24 +452,24 @@
                     <!-- スライダー要素 -->
                     <div class="threshold-controls">
                         <div class="threshold-control">
-                            <label for="roll-threshold">ロール許容値 (横傾き):</label>
+                            <label for="roll-threshold">Tolérance roulis:</label>
                             <input type="range" id="roll-threshold" min="0" max="3" value="1.5" step="0.5">
                             <span id="roll-threshold-value">1.5°</span>
                         </div>
                         <div class="threshold-control">
-                            <label for="pitch-threshold">ピッチ許容値 (縦傾き):</label>
+                            <label for="pitch-threshold">Tolérance tangage:</label>
                             <input type="range" id="pitch-threshold" min="0" max="3" value="1.5" step="0.5">
                             <span id="pitch-threshold-value">1.5°</span>
                         </div>
                         <div class="threshold-control">
-                            <label for="yaw-threshold">ヨー許容値 (横向き):</label>
+                            <label for="yaw-threshold">Tolérance lacet:</label>
                             <input type="range" id="yaw-threshold" min="0" max="3" value="1.5" step="0.5">
                             <span id="yaw-threshold-value">1.5°</span>
                         </div>
                         <div class="threshold-control">
-                            <label for="stability-time">安定時間 (秒):</label>
+                            <label for="stability-time">Temps de stabilité:</label>
                             <input type="range" id="stability-time" min="0.1" max="1.0" value="0.5" step="0.1">
-                            <span id="stability-time-value">0.5秒</span>
+                            <span id="stability-time-value">0.5</span>
                         </div>
                     </div>
                 </div>
@@ -476,8 +477,8 @@
         </div>
         
         <div class="controls">
-            <button id="start-btn" class="mode-button">開始</button>
-            <button id="preview-btn" class="mode-button" disabled>プレビュー開始</button>
+            <button id="start-btn" class="mode-button">1. Start "Before" Photo</button>
+            <button id="preview-btn" class="mode-button" disabled>2. Start 5-Min Challenge</button>
             <!-- <button id="switch-camera-btn" disabled>カメラ切替</button>  -->
             <!-- <button id="manual-capture-btn" class="capture-button" disabled>手動キャプチャ</button> -->
             <button id="toggle-mesh-btn" class="small-button">メッシュ表示</button>
@@ -486,18 +487,18 @@
         
         <div class="gallery">
             <div class="gallery-item" id="before-captures" style="display: none;">
-                <h3>ビフォー撮影</h3>
+                <h3>Photos "avant"</h3>
                 <div class="captures-grid" id="before-grid"></div>
             </div>
             
             <div class="gallery-item" id="video-capture" style="display: none;">
-                <h3>動画撮影</h3>
+                <h3>Enregistrement vidéo</h3>
                 <video id="recorded-video" class="recorded-video" controls></video>
                 <a id="download-link" href="#" download="recorded-video.webm" style="display: block; margin-top: 10px;">ダウンロード</a>
             </div>
             
             <div class="gallery-item" id="after-captures" style="display: none;">
-                <h3>アフター撮影</h3>
+                <h3>Photos "après"</h3>
                 <div class="captures-grid" id="after-grid"></div>
             </div>
         </div>
@@ -508,10 +509,10 @@
     <div id="side-dialog" class="side-dialog" style="display: none;">
         <div class="side-dialog-content">
             <img id="side-dialog-image" class="side-image" src="" alt="施術後の画像">
-            <p class="side-question">施術されたのは<span style="color: red; font-weight: bold;">ご自分のお顔の右側</span>ですか、<span style="color: red; font-weight: bold;">左側</span>ですか？</p>
+            <p class="side-question">Le traitement a-t-il été effectué sur le côté droit ou gauche de votre visage ?</p>
             <div class="side-buttons">
-                <button id="right-side-btn" class="side-button">←右側</button>
-                <button id="left-side-btn" class="side-button">左側→</button>
+                <button id="right-side-btn" class="side-button">←Côté droit</button>
+                <button id="left-side-btn" class="side-button">Côté gauche→</button>
             </div>
         </div>
     </div>
@@ -586,6 +587,8 @@
         let showAxis = true;  
         // 施術部位情報
         let treatedSide = ''; // 'left' または 'right'
+        // グローバル変数に輪郭表示フラグを追加
+        let showFaceOutline = true; // デフォルトでは表示する
 
         // 初期化
         function init() {
@@ -741,10 +744,12 @@
                 
                 // ビフォーモードに移行
                 currentMode = MODE.BEFORE;
-                statusText.textContent = 'ビフォー撮影モード: 正面を向いてください (1/5)';
-                startBtn.textContent = 'キャンセル';
+                statusText.textContent = 'Ajustez votre visage face à la caméra jusqu\'à ce que la barre sur le nez devienne un point.';
+                startBtn.textContent = 'Annuler';
                 previewBtn.disabled = true;
                 //manualCaptureBtn.disabled = false;
+                // 輪郭表示を有効にする
+                showFaceOutline = true;
                 
                 // 準備
                 beforeCapturesCount = 0;
@@ -762,17 +767,20 @@
                 resetApp();
                 
             } else if (currentMode === MODE.RECORDING) {
+
                 // 録画停止
                 stopRecording();
                 stopCountdown();
                 
                 // アフターモードに移行
                 currentMode = MODE.AFTER;
-                statusText.textContent = 'アフター撮影モード: 正面を向いてください (1/5)';
-                startBtn.textContent = 'キャンセル';
+                statusText.textContent = 'Mode photo "après": Ajustez votre visage face à la caméra';
+                startBtn.textContent = 'Annuler';
                 previewBtn.disabled = true;
                 //manualCaptureBtn.disabled = false;
                 
+                console.log('アフターモードに移行しました'); // デバッグ用
+
                 // 準備
                 afterCapturesCount = 0;
                 afterCapturesList = [];
@@ -785,6 +793,8 @@
                 stablePosition = false;
                 
             } else if (currentMode === MODE.AFTER || currentMode === MODE.AFTER_COMPLETED || currentMode === MODE.COMPLETED) {
+                // アフターモードでは輪郭表示を有効に
+                showFaceOutline = true;
                 // アプリのリセット
                 resetApp();
             }
@@ -795,8 +805,8 @@
             if (currentMode === MODE.BEFORE_COMPLETED) {
                 // 録画モードに移行
                 currentMode = MODE.RECORDING;
-                statusText.textContent = '動画撮影モード: 5分間の録画を開始します';
-                startBtn.textContent = '撮影終了';
+                statusText.textContent = 'Mode vidéo: Enregistrement de 5 minutes démarré';
+                startBtn.textContent = 'Capture terminée !';
                 previewBtn.disabled = true;
                 //manualCaptureBtn.disabled = true;
                 
@@ -864,11 +874,11 @@
             stopCountdown();
             
             currentMode = MODE.IDLE;
-            statusText.textContent = '準備中...';
-            poseInfo.textContent = '姿勢情報: 検出中...';
+            statusText.textContent = 'Tap "1. Start \'Before\' Photo" to begin.';
+            poseInfo.textContent = 'Tap "1. Start \'Before\' Photo" to begin.';
             progressFill.style.width = '0%';
-            
-            startBtn.textContent = '開始';
+    
+            startBtn.textContent =   '1. Start "Before" Photo';
             previewBtn.disabled = true;
             //switchCameraBtn.disabled = true;
             //manualCaptureBtn.disabled = true;
@@ -884,6 +894,7 @@
             afterCapturesCount = 0;
             beforeCapturesList = [];
             afterCapturesList = [];
+            showFaceOutline = true; // 輪郭表示を有効に戻す
         }
         
         // MediaPipe結果処理
@@ -928,7 +939,7 @@
                 
                 // 姿勢情報を表示
                 canvasCtx.restore(); // ミラーリングをリセット
-                poseInfo.textContent = `姿勢情報: ロール: ${facePose.roll.toFixed(1)}°, ピッチ: ${facePose.pitch.toFixed(1)}°, ヨー: ${facePose.yaw.toFixed(1)}°`;
+                poseInfo.textContent = `Alignez votre visage avec le contour. Roulis: ${facePose.roll.toFixed(1)}°, Tangage: ${facePose.pitch.toFixed(1)}°, Lacet: ${facePose.yaw.toFixed(1)}°`;
                 
                 // 姿勢が正面に近いかチェック
                 checkFrontFacing();
@@ -938,9 +949,57 @@
                 stableStartTime = null;
                 stablePosition = false;
                 progressFill.style.width = '0%';
-                poseInfo.textContent = '姿勢情報: 顔が検出されていません';
+                poseInfo.textContent = 'Visage non détecté';
+            }
+
+            // 顔の輪郭ガイドを描画する条件を単純化
+            // BEFORE, AFTER モードの場合に表示（キャプチャ瞬間以外）
+            const shouldShowOutline = (currentMode === MODE.BEFORE || currentMode === MODE.AFTER) && !stablePosition;
+   
+            // 顔の輪郭ガイドを描画（キャプチャ中でない場合のみ）
+            if (showFaceOutline && !stablePosition) {
+                drawFaceOutline();
             }
         }
+
+        // 輪郭描画関数を単純化して確実に動作するようにする
+        function drawFaceOutline() {
+            // キャンバスの中央座標
+            const centerX = outputCanvas.width / 2;
+            const centerY = outputCanvas.height / 2;
+            
+            // 楕円のサイズ
+            const outlineWidth = outputCanvas.width * 0.35; // 画面幅の35%
+            const outlineHeight = outputCanvas.height * 0.8; // 画面高さの80%
+            
+            // 楕円を描画
+            canvasCtx.beginPath();
+            canvasCtx.ellipse(
+                centerX, 
+                centerY, 
+                outlineWidth / 2, 
+                outlineHeight / 2, 
+                0, 
+                0, 
+                2 * Math.PI
+            );
+            canvasCtx.strokeStyle = 'rgba(255, 105, 180, 0.8)'; // ピンク色（透明度80%に増加）
+            canvasCtx.lineWidth = 3;
+            canvasCtx.stroke();
+            
+            // 顔の位置合わせ用の補助線
+            // canvasCtx.beginPath();
+            // canvasCtx.moveTo(centerX - 20, centerY);
+            // canvasCtx.lineTo(centerX + 20, centerY);
+            // canvasCtx.moveTo(centerX, centerY - 20);
+            // canvasCtx.lineTo(centerX, centerY + 20);
+            // canvasCtx.strokeStyle = 'rgba(255, 105, 180, 0.6)'; // ピンク色（透明度60%に増加）
+            // canvasCtx.lineWidth = 2;
+            // canvasCtx.stroke();
+            
+            console.log('輪郭ガイドを描画しました'); // デバッグ用
+        }
+
         
         // 顔の姿勢計算
         function calculateFacePose(landmarks) {
@@ -1064,6 +1123,10 @@
                 currentMode === MODE.AFTER_COMPLETED || 
                 currentMode === MODE.COMPLETED;
             
+            if (currentMode === MODE.AFTER) {
+                console.log('現在アフターモードです。輪郭表示が必要です'); // デバッグ用
+            }
+
             if (skipCheck) {
                 // 非アクティブモードではプログレスバーをクリア
                 if (progressFill.style.width !== '0%') {
@@ -1134,6 +1197,8 @@
             console.log('ビフォー画像キャプチャ開始');
             // 姿勢が安定した状態をリセット
             stablePosition = false;
+            // 一時的に輪郭表示を無効にする
+            showFaceOutline = false;
             
             // 映像のみを一時的なキャンバスにコピー
             const tempCanvas = document.createElement('canvas');
@@ -1171,6 +1236,7 @@
                 // 安定時間を空けるために少し待機
                 setTimeout(() => {
                     stableStartTime = null;
+                    showFaceOutline = true; // 輪郭表示を再度有効化
                 }, 500);
             } else {
                 console.log('ビフォー撮影完了');
@@ -1178,6 +1244,7 @@
                 progressFill.style.width = '0%';
                 stableStartTime = null;
                 stablePosition = false;
+                showFaceOutline = true;
                 // 5枚撮影完了 - 最も良い画像のみ表示
                 const bestCapture = findBestCapture(beforeCapturesList);
                 
@@ -1188,7 +1255,7 @@
                 
                 // ビフォーモード完了
                 currentMode = MODE.BEFORE_COMPLETED;
-                statusText.textContent = 'ビフォー撮影完了！プレビュー開始ボタンを押してください';
+                statusText.textContent = 'Let\'s start the challenge! Tap "2. Start 5-Min Challenge".';
                 previewBtn.disabled = false;
             }
         }
@@ -1229,18 +1296,21 @@
             
             if (afterCapturesCount < 5) {
                 // 次の撮影に進む
-                statusText.textContent = `アフター撮影モード: 正面を向いてください (${afterCapturesCount + 1}/5)`;
+                statusText.textContent = `Mode photo "après": Ajustez votre visage face à la caméra `;
                 // 明示的にプログレスバーをリセット
                 progressFill.style.width = '0%';
                 // 安定時間を空けるために少し待機
                 setTimeout(() => {
                     stableStartTime = null;
+                    stablePosition = false; // 明示的に false に設定
                     console.log('次のアフターキャプチャの準備完了');
                 }, 500);
             } else {
                 console.log('アフター撮影完了');
                 // 5枚撮影完了
-                statusText.textContent = 'アフター撮影完了！';
+                statusText.textContent = 'Photos "après" terminées！';
+                // 輪郭表示を再び有効にする
+                showFaceOutline = true;
 
                 // プログレスバーを明示的にリセット
                 progressFill.style.width = '0%';
@@ -1259,8 +1329,8 @@
                     
                     // すべて完了
                     currentMode = MODE.COMPLETED;
-                    statusText.textContent = '撮影完了！ビフォー/アフター比較ができます';
-                    startBtn.textContent = '最初から';
+                    statusText.textContent = 'Terminé ! Vous pouvez comparer les photos avant/après';
+                    startBtn.textContent = 'Recommencer';
                     
                     // 施術部位選択ダイアログを表示（少し遅延をかける）
                     setTimeout(() => {
@@ -1431,7 +1501,7 @@
                 emailDisplay.textContent = `メール: ${email}`;
                 emailDisplay.style.display = 'block';
             } else {
-                alert('有効なメールアドレスを入力してください');
+                alert('Veuillez entrer une adresse e-mail valide');
             }
         }
 
@@ -1474,7 +1544,7 @@
             notification.style.padding = '20px';
             notification.style.borderRadius = '10px';
             notification.style.zIndex = '1000';
-            notification.textContent = '撮影完了！';
+            notification.textContent = 'Capture terminée！';
             
             document.body.appendChild(notification);
             
