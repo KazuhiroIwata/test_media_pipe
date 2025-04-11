@@ -364,6 +364,95 @@
         .side-button:hover {
             background-color: #f0f0f0;
         }
+         /* 送信中ダイアログのスタイル */
+         @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 2000;
+        }
+        
+        .dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            z-index: 2001;
+            text-align: center;
+            min-width: 300px;
+        }
+        
+        .spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 2s linear infinite;
+            margin: 0 auto 15px auto;
+        }
+        
+        .status-text {
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        
+        .progress-text {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .success-icon {
+            font-size: 48px;
+            color: #4CAF50;
+            margin-bottom: 15px;
+        }
+        
+        .error-icon {
+            font-size: 48px;
+            color: #f44336;
+            margin-bottom: 15px;
+        }
+        
+        .message-text {
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        
+        .detail-text {
+            margin-bottom: 15px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .ok-button {
+            padding: 8px 30px;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        .success-button {
+            background-color: #4CAF50;
+        }
+        
+        .error-button {
+            background-color: #f44336;
+        }
     </style>
 </head>
 <body>
@@ -453,18 +542,18 @@
                     <div class="threshold-controls">
                         <div class="threshold-control">
                             <label for="roll-threshold">Tolérance roulis:</label>
-                            <input type="range" id="roll-threshold" min="0" max="3" value="1.5" step="0.5">
-                            <span id="roll-threshold-value">1.5°</span>
+                            <input type="range" id="roll-threshold" min="0" max="5" value="3.0" step="0.5">
+                            <span id="roll-threshold-value">3.0°</span>
                         </div>
                         <div class="threshold-control">
                             <label for="pitch-threshold">Tolérance tangage:</label>
-                            <input type="range" id="pitch-threshold" min="0" max="3" value="1.5" step="0.5">
-                            <span id="pitch-threshold-value">1.5°</span>
+                            <input type="range" id="pitch-threshold" min="0" max="5" value="5.0" step="0.5">
+                            <span id="pitch-threshold-value">5.0°</span>
                         </div>
                         <div class="threshold-control">
                             <label for="yaw-threshold">Tolérance lacet:</label>
-                            <input type="range" id="yaw-threshold" min="0" max="3" value="1.5" step="0.5">
-                            <span id="yaw-threshold-value">1.5°</span>
+                            <input type="range" id="yaw-threshold" min="0" max="5" value="3.0" step="0.5">
+                            <span id="yaw-threshold-value">3.0°</span>
                         </div>
                         <div class="threshold-control">
                             <label for="stability-time">Temps de stabilité:</label>
@@ -515,6 +604,34 @@
                 <button id="left-side-btn" class="side-button">Côté gauche→</button>
             </div>
         </div>
+    </div>
+
+    <!-- 送信中ダイアログ用HTML -->
+    <div id="sending-overlay" class="overlay" style="display: none;">
+    </div>
+    <div id="sending-dialog" class="dialog" style="display: none;">
+        <div class="spinner"></div>
+        <div id="sending-status" class="status-text">Envoi de données en cours...</div>
+        <div id="sending-progress" class="progress-text">Préparation...</div>
+    </div>
+    
+    <!-- 成功ダイアログ用HTML -->
+    <div id="success-overlay" class="overlay" style="display: none;">
+    </div>
+    <div id="success-dialog" class="dialog" style="display: none;">
+        <div class="success-icon">✓</div>
+        <div class="message-text">Données envoyées avec succès!</div>
+        <button id="success-ok" class="ok-button success-button">OK</button>
+    </div>
+    
+    <!-- エラーダイアログ用HTML -->
+    <div id="error-overlay" class="overlay" style="display: none;">
+    </div>
+    <div id="error-dialog" class="dialog" style="display: none;">
+        <div class="error-icon">✗</div>
+        <div class="message-text">Erreur lors de l'envoi des données</div>
+        <div id="error-details" class="detail-text">Veuillez réessayer plus tard.</div>
+        <button id="error-ok" class="ok-button error-button">OK</button>
     </div>
 
     <script>
@@ -589,6 +706,193 @@
         let treatedSide = ''; // 'left' または 'right'
         // グローバル変数に輪郭表示フラグを追加
         let showFaceOutline = true; // デフォルトでは表示する
+        let recordingStarted = false; // 録画が始まったかどうかのフラグ
+        let recordingNotification = null; // 録画開始通知用の要素
+
+        // グローバル変数に追加または修正
+        // デバッグ用の短い時間と本番用の時間を両方定義
+        const DEBUG_TOTAL_TIME = 70; // デバッグ用：70秒
+        const PRODUCTION_TOTAL_TIME = 5 * 60; // 本番用：5分（300秒）
+
+        // 現在使用する時間（デバッグ中はDEBUG_TOTAL_TIMEを使用）
+        const TOTAL_COUNTDOWN_TIME = DEBUG_TOTAL_TIME; // デバッグ時はこの行を使用
+        // const TOTAL_COUNTDOWN_TIME = PRODUCTION_TOTAL_TIME; // 本番時はこの行のコメントを外す
+
+        // 録画開始タイミング（全体の時間から録画時間を引いた値）
+        const RECORDING_START_TIME = 60; // 録画時間は1分（60秒）固定
+        // 70秒の場合、録画開始は残り60秒の時点 = 開始後10秒
+        // 5分（300秒）の場合、録画開始は残り60秒の時点 = 開始後240秒
+
+
+        // グローバル変数に追加
+        let apiEndpoints = {
+            production: 'https://paris-api.face-matrix.com/event/report',
+            developmentParis: 'https://paris-api.dev.face-matrix.com/event/report',
+            developmentTokyo: 'https://dev-api.face-matrix.com/event/report'
+        };
+
+        let currentEndpoint = 'developmentTokyo'; // 最初は開発環境（東京）
+        let eventCode = 'EV-FR-2504-03'; // 本プログラム用
+        let apiKey = 'd3cb3239c140b79603487437e5b24664d79b8638d'; // 対応するAPIキー
+
+        // エンドポイントを切り替える関数
+        function switchApiEndpoint(endpoint) {
+            if (apiEndpoints[endpoint]) {
+                currentEndpoint = endpoint;
+                console.log('Endpoint changed to:', apiEndpoints[currentEndpoint]);
+                return true;
+            }
+            return false;
+        }
+
+        // 送信中ダイアログの表示
+        function showSendingDialog() {
+            document.getElementById('sending-overlay').style.display = 'block';
+            document.getElementById('sending-dialog').style.display = 'block';
+            document.getElementById('sending-status').textContent = 'Envoi de données en cours...';
+            document.getElementById('sending-progress').textContent = 'Préparation...';
+            
+            return {
+                statusText: document.getElementById('sending-status'),
+                progress: document.getElementById('sending-progress')
+            };
+        }
+
+        // 送信中ダイアログを閉じる
+        function closeSendingDialog() {
+            document.getElementById('sending-overlay').style.display = 'none';
+            document.getElementById('sending-dialog').style.display = 'none';
+        }
+
+        // 送信成功ダイアログの表示
+        function showSuccessDialog() {
+            document.getElementById('success-overlay').style.display = 'block';
+            document.getElementById('success-dialog').style.display = 'block';
+            
+            document.getElementById('success-ok').addEventListener('click', function() {
+                document.getElementById('success-overlay').style.display = 'none';
+                document.getElementById('success-dialog').style.display = 'none';
+            });
+        }
+
+        // エラーダイアログの表示
+        function showErrorDialog(errorMessage) {
+            document.getElementById('error-overlay').style.display = 'block';
+            document.getElementById('error-dialog').style.display = 'block';
+            document.getElementById('error-details').textContent = errorMessage || 'Veuillez réessayer plus tard.';
+            
+            document.getElementById('error-ok').addEventListener('click', function() {
+                document.getElementById('error-overlay').style.display = 'none';
+                document.getElementById('error-dialog').style.display = 'none';
+            });
+        }
+
+        // 画像データをバイナリに変換する関数
+        async function convertImageToBlob(dataUrl) {
+            try {
+                const response = await fetch(dataUrl);
+                const blob = await response.blob();
+                return blob;
+            } catch (error) {
+                console.error('Error converting image to blob:', error);
+                throw error;
+            }
+        }
+
+        // APIにデータを送信する関数を修正してサイズログを追加
+    async function sendDataToAPI(beforeImageData, afterImageData, videoBlob) {
+        // 送信中ダイアログを表示
+        const { statusText, progress } = showSendingDialog();
+        
+        try {
+            // メールアドレスが取得できなければエラー
+            if (!userEmail) {
+                throw new Error('Adresse e-mail non disponible');
+            }
+            
+            progress.textContent = 'Préparation des images...';
+            
+            // 画像をBlobに変換
+            const beforeImageBlob = await convertImageToBlob(beforeImageData);
+            console.log(`ビフォー画像サイズ: ${Math.round(beforeImageBlob.size / 1024)} KB`);
+            progress.textContent = 'Image "avant" prête...';
+            
+            const afterImageBlob = await convertImageToBlob(afterImageData);
+            console.log(`アフター画像サイズ: ${Math.round(afterImageBlob.size / 1024)} KB`);
+            progress.textContent = 'Image "après" prête...';
+            
+            // FormDataの作成
+            const formData = new FormData();
+            formData.append('email', userEmail);
+            formData.append('side', treatedSide); // left または right
+            formData.append('before_image', beforeImageBlob, 'before.jpg');
+            formData.append('after_image', afterImageBlob, 'after.jpg');
+            
+            let videoSize = 0;
+            if (videoBlob) {
+                videoSize = videoBlob.size;
+                console.log(`動画サイズ: ${Math.round(videoBlob.size / 1024 / 1024)} MB (${Math.round(videoBlob.size / 1024)} KB)`);
+                progress.textContent = 'Préparation de la vidéo...';
+                formData.append('movie', videoBlob, 'recording.webm');
+            }
+            
+            // FormDataの総サイズを計算
+            const totalSize = beforeImageBlob.size + afterImageBlob.size + videoSize;
+            console.log(`総送信データサイズ: ${Math.round(totalSize / 1024 / 1024)} MB (${Math.round(totalSize / 1024)} KB)`);
+            
+            // 詳細なFormDataサイズをログ出力
+            console.log('--- 送信データ詳細 ---');
+            let formDataTotalSize = 0;
+            for (let [key, value] of formData.entries()) {
+                if (value instanceof Blob) {
+                    formDataTotalSize += value.size;
+                    console.log(`${key}: ${Math.round(value.size / 1024)} KB`);
+                } else {
+                    console.log(`${key}: ${value}`);
+                }
+            }
+            console.log(`FormData総サイズ（概算）: ${Math.round(formDataTotalSize / 1024 / 1024)} MB (${Math.round(formDataTotalSize / 1024)} KB)`);
+            
+            // ヘッダー設定
+            const headers = {
+                'X-Event-Code': eventCode,
+                'X-Api-Auth-Key': apiKey
+            };
+            
+            // 現在のエンドポイントを取得
+            const endpoint = apiEndpoints[currentEndpoint];
+            
+            progress.textContent = 'Envoi des données au serveur...';
+            statusText.textContent = 'Envoi en cours...';
+            
+            // POSTリクエスト送信
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: headers,
+                body: formData
+            });
+            
+            // レスポンスのJSONを解析
+            const result = await response.json();
+            
+            // 送信中ダイアログを閉じる
+            closeSendingDialog();
+            
+            // 成功・失敗の確認
+            if (response.ok && result.success) {
+                showSuccessDialog();
+                return true;
+            } else {
+                throw new Error('Réponse du serveur: ' + JSON.stringify(result));
+            }
+        } catch (error) {
+            console.error('Error sending data to API:', error);
+            closeSendingDialog();
+            showErrorDialog(error.message);
+            return false;
+        }
+    }
+
 
         // 初期化
         function init() {
@@ -771,6 +1075,8 @@
                 // 録画停止
                 stopRecording();
                 stopCountdown();
+                hideRecordingNotification(); // 通知を非表示
+                recordingStarted = false;    // 録画状態をリセット
                 
                 // アフターモードに移行
                 currentMode = MODE.AFTER;
@@ -778,6 +1084,9 @@
                 startBtn.textContent = 'Annuler';
                 previewBtn.disabled = true;
                 //manualCaptureBtn.disabled = false;
+
+                // 青軸を再表示
+                showAxis = true;
                 
                 console.log('アフターモードに移行しました'); // デバッグ用
 
@@ -800,49 +1109,75 @@
             }
         }
         
-        // プレビュー開始
+        // プレビュー開始関数の修正（メッセージを更新）
         function startPreview() {
             if (currentMode === MODE.BEFORE_COMPLETED) {
                 // 録画モードに移行
                 currentMode = MODE.RECORDING;
-                statusText.textContent = 'Mode vidéo: Enregistrement de 5 minutes démarré';
-                startBtn.textContent = 'Capture terminée !';
+                
+                // デバッグ中かどうかでメッセージを変更
+                if (TOTAL_COUNTDOWN_TIME === DEBUG_TOTAL_TIME) {
+                    statusText.textContent = 'Mode vidéo: Préparation de l\'enregistrement (1 minute en fin du défi - MODE DEBUG)';
+                } else {
+                    statusText.textContent = 'Mode vidéo: Préparation de l\'enregistrement (1 minute en fin du défi)';
+                }
+                
+                startBtn.textContent = 'Terminer';
                 previewBtn.disabled = true;
-                //manualCaptureBtn.disabled = true;
+                
+                // 青軸を明示的に非表示
+                showAxis = false;
                 
                 // カウントダウン開始
                 startCountdown();
                 
-                // 録画開始
-                startRecording();
+                // 録画はカウントダウン内で開始される
+                recordingStarted = false;
             }
         }
 
-        // カウントダウン開始
+        // カウントダウン開始関数を修正
         function startCountdown() {
-            countdownTimeLeft = 5 * 60; // 5分（秒単位）
+            countdownTimeLeft = TOTAL_COUNTDOWN_TIME; // 設定した時間を使用
             updateCountdownDisplay();
-            document.getElementById('countdown').style.display = 'flex'; // flexに変更
+            document.getElementById('countdown').style.display = 'flex';
             
             countdownInterval = setInterval(() => {
                 countdownTimeLeft--;
                 updateCountdownDisplay();
                 
+                // 録画開始タイミング（残り60秒になったとき）
+                if (countdownTimeLeft === RECORDING_START_TIME && !recordingStarted) {
+                    startRecording();
+                    showRecordingNotification();
+                    recordingStarted = true;
+                }
+                
                 if (countdownTimeLeft <= 0) {
                     stopCountdown();
                     stopRecording();
+                    hideRecordingNotification();
+                    recordingStarted = false;
                     
                     // アフターモードに移行
                     currentMode = MODE.AFTER;
-                    statusText.textContent = 'アフター撮影モード: 正面を向いてください (1/5)';
-                    startBtn.textContent = 'キャンセル';
+                    statusText.textContent = 'Mode photo "après": Ajustez votre visage face à la caméra (1/5)';
+                    startBtn.textContent = 'Annuler';
                     previewBtn.disabled = true;
+                    
+                    // 青軸を再表示するために明示的に設定
+                    showAxis = true;
                     
                     // 準備
                     afterCapturesCount = 0;
                     afterCapturesList = [];
                     afterGrid.innerHTML = '';
                     afterCaptures.style.display = 'none';
+
+                    // アフターモードに移行時に状態をリセット
+                    progressFill.style.width = '0%';
+                    stableStartTime = null;
+                    stablePosition = false;
                 }
             }, 1000);
         }
@@ -853,11 +1188,66 @@
             document.getElementById('countdown').style.display = 'none';
         }
 
-        // カウントダウン表示更新
+        // カウントダウン表示更新関数の修正
         function updateCountdownDisplay() {
             const minutes = Math.floor(countdownTimeLeft / 60);
             const seconds = countdownTimeLeft % 60;
             document.getElementById('countdown').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            // 残り時間に応じてステータスメッセージを更新
+            if (currentMode === MODE.RECORDING) {
+                if (countdownTimeLeft > RECORDING_START_TIME) {
+                    // 録画開始前
+                    const remainingSecondsToRecord = countdownTimeLeft - RECORDING_START_TIME;
+                    const remainingMinutesToRecord = Math.ceil(remainingSecondsToRecord / 60);
+                    
+                    // デバッグ用の短い時間では秒単位で表示
+                    if (TOTAL_COUNTDOWN_TIME === DEBUG_TOTAL_TIME) {
+                        statusText.textContent = `Mode vidéo: Enregistrement dans ${remainingSecondsToRecord} seconde(s)`;
+                    } else {
+                        statusText.textContent = `Mode vidéo: Enregistrement dans ${remainingMinutesToRecord} minute(s)`;
+                    }
+                } else {
+                    // 録画中
+                    statusText.textContent = 'Mode vidéo: Enregistrement en cours !';
+                }
+            }
+        }
+
+        // 録画開始通知を表示する関数
+        function showRecordingNotification() {
+            // 既存の通知があれば削除
+            hideRecordingNotification();
+            
+            // 新しい通知要素を作成
+            recordingNotification = document.createElement('div');
+            recordingNotification.style.position = 'fixed';
+            recordingNotification.style.top = '20px';
+            recordingNotification.style.left = '50%';
+            recordingNotification.style.transform = 'translateX(-50%)';
+            recordingNotification.style.backgroundColor = 'rgba(255, 0, 0, 0.8)';
+            recordingNotification.style.color = 'white';
+            recordingNotification.style.padding = '10px 20px';
+            recordingNotification.style.borderRadius = '5px';
+            recordingNotification.style.fontSize = '18px';
+            recordingNotification.style.fontWeight = 'bold';
+            recordingNotification.style.zIndex = '1000';
+            recordingNotification.textContent = 'Enregistrement démarré !'; // フランス語で「録画開始！」
+            
+            // 点滅効果
+            recordingNotification.style.animation = 'blink 1s infinite';
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes blink {
+                    0% { opacity: 1; }
+                    50% { opacity: 0.5; }
+                    100% { opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            // ページに追加
+            document.body.appendChild(recordingNotification);
         }
         
         // アプリのリセット
@@ -873,6 +1263,10 @@
             
             stopCountdown();
             
+             // 録画関連の状態もリセット
+            recordingStarted = false;
+            hideRecordingNotification();
+
             currentMode = MODE.IDLE;
             statusText.textContent = 'Tap "1. Start \'Before\' Photo" to begin.';
             poseInfo.textContent = 'Tap "1. Start \'Before\' Photo" to begin.';
@@ -895,6 +1289,16 @@
             beforeCapturesList = [];
             afterCapturesList = [];
             showFaceOutline = true; // 輪郭表示を有効に戻す
+            // 青軸表示を元に戻す
+            showAxis = true;
+        }
+
+        // 録画開始通知を非表示にする関数
+        function hideRecordingNotification() {
+            if (recordingNotification) {
+                document.body.removeChild(recordingNotification);
+                recordingNotification = null;
+            }
         }
         
         // MediaPipe結果処理
@@ -912,7 +1316,7 @@
                 faceDetected = true;
                 
                 // 顔のランドマークを描画（ミラーリング状態で描画） - showMeshフラグで条件分岐
-                if (showMesh) {
+                if (showMesh && currentMode !== MODE.RECORDING) {
                     for (const landmarks of results.multiFaceLandmarks) {
                         drawConnectors(canvasCtx, landmarks, FACEMESH_TESSELATION, 
                                     {color: '#C0C0C070', lineWidth: 1});
@@ -934,13 +1338,23 @@
                 // 顔の姿勢を計算
                 calculateFacePose(results.multiFaceLandmarks[0]);
                 
-                // 3軸の表示（ミラーリング状態で描画）
-                drawPoseAxes(results.multiFaceLandmarks[0]);
+                // 3軸の表示条件を修正 - RECORDING モード以外で表示するように変更
+                if (currentMode !== MODE.RECORDING && showAxis) {
+                    drawPoseAxes(results.multiFaceLandmarks[0]);
+                }
                 
                 // 姿勢情報を表示
                 canvasCtx.restore(); // ミラーリングをリセット
-                poseInfo.textContent = `Alignez votre visage avec le contour. Roulis: ${facePose.roll.toFixed(1)}°, Tangage: ${facePose.pitch.toFixed(1)}°, Lacet: ${facePose.yaw.toFixed(1)}°`;
-                
+
+                if (poseInfo) {
+                    if (currentMode === MODE.RECORDING) {
+                        // 録画モード中は姿勢情報を表示しない
+                        poseInfo.textContent = '';
+                    } else {
+                        poseInfo.textContent = `Alignez votre visage avec le contour. Roulis: ${facePose.roll.toFixed(1)}°, Tangage: ${facePose.pitch.toFixed(1)}°, Lacet: ${facePose.yaw.toFixed(1)}°`;
+                    }
+                }
+
                 // 姿勢が正面に近いかチェック
                 checkFrontFacing();
             } else {
@@ -949,27 +1363,39 @@
                 stableStartTime = null;
                 stablePosition = false;
                 progressFill.style.width = '0%';
-                poseInfo.textContent = 'Visage non détecté';
+                 if (poseInfo && currentMode !== MODE.RECORDING) {
+                    poseInfo.textContent = 'Visage non détecté';
+                }
             }
 
             // 顔の輪郭ガイドを描画する条件を単純化
             // BEFORE, AFTER モードの場合に表示（キャプチャ瞬間以外）
             const shouldShowOutline = (currentMode === MODE.BEFORE || currentMode === MODE.AFTER) && !stablePosition;
    
-            // 顔の輪郭ガイドを描画（キャプチャ中でない場合のみ）
-            if (showFaceOutline && !stablePosition) {
-                drawFaceOutline();
+            // 顔の輪郭ガイドを描画する条件をより明示的に
+            if (currentMode === MODE.BEFORE || currentMode === MODE.AFTER) {
+                // BEFORE または AFTER モードの場合のみ、かつキャプチャ中でない場合
+                if (!stablePosition) {
+                    drawFaceOutline();
+                }
             }
         }
 
-        // 輪郭描画関数を単純化して確実に動作するようにする
+        // 追加の確認として、RECORDING モードに直接影響する
+        // drawFaceOutline関数を修正
         function drawFaceOutline() {
+            // 録画モード中は描画しない（追加の安全対策）
+            if (currentMode === MODE.RECORDING) {
+                console.log('録画モード中は輪郭を描画しない');
+                return;
+            }
+            
             // キャンバスの中央座標
             const centerX = outputCanvas.width / 2;
             const centerY = outputCanvas.height / 2;
             
             // 楕円のサイズ
-            const outlineWidth = outputCanvas.width * 0.35; // 画面幅の35%
+            const outlineWidth = outputCanvas.width * 0.3; // 画面幅の30%
             const outlineHeight = outputCanvas.height * 0.8; // 画面高さの80%
             
             // 楕円を描画
@@ -983,21 +1409,11 @@
                 0, 
                 2 * Math.PI
             );
-            canvasCtx.strokeStyle = 'rgba(255, 105, 180, 0.8)'; // ピンク色（透明度80%に増加）
+            canvasCtx.strokeStyle = 'rgba(255, 105, 180, 0.8)'; // ピンク色（透明度80%）
             canvasCtx.lineWidth = 3;
             canvasCtx.stroke();
             
-            // 顔の位置合わせ用の補助線
-            // canvasCtx.beginPath();
-            // canvasCtx.moveTo(centerX - 20, centerY);
-            // canvasCtx.lineTo(centerX + 20, centerY);
-            // canvasCtx.moveTo(centerX, centerY - 20);
-            // canvasCtx.lineTo(centerX, centerY + 20);
-            // canvasCtx.strokeStyle = 'rgba(255, 105, 180, 0.6)'; // ピンク色（透明度60%に増加）
-            // canvasCtx.lineWidth = 2;
-            // canvasCtx.stroke();
-            
-            console.log('輪郭ガイドを描画しました'); // デバッグ用
+            console.log('輪郭ガイドを描画（モード:', currentMode, '）');
         }
 
         
@@ -1116,6 +1532,7 @@
         
         // 正面向きチェック
         function checkFrontFacing() {
+            console.log('現在のモード:', currentMode);
             // モードに基づいて処理をスキップする条件
             const skipCheck = 
                 currentMode === MODE.RECORDING || 
@@ -1303,6 +1720,8 @@
                 setTimeout(() => {
                     stableStartTime = null;
                     stablePosition = false; // 明示的に false に設定
+                    // 青軸表示を保持
+                    showAxis = true;
                     console.log('次のアフターキャプチャの準備完了');
                 }, 500);
             } else {
@@ -1467,8 +1886,11 @@
         function stopRecording() {
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.stop();
+                recordingStarted = false;
+                hideRecordingNotification();
             }
         }
+
         // メールダイアログを表示
         function showEmailDialog() {
             document.getElementById('email-overlay').style.display = 'block';
@@ -1524,7 +1946,8 @@
             document.getElementById('side-dialog').style.display = 'none';
         }
 
-        // 施術部位を保存
+        // formData未定義エラーの修正
+        // 施術部位選択後にAPI送信を行う関数の修正
         function saveTreatedSide(side) {
             treatedSide = side;
             console.log(`施術された側: ${side}`);
@@ -1533,27 +1956,377 @@
             document.getElementById('side-dialog-overlay').style.display = 'none';
             document.getElementById('side-dialog').style.display = 'none';
             
-            // 完了通知を表示
-            const notification = document.createElement('div');
-            notification.style.position = 'fixed';
-            notification.style.top = '50%';
-            notification.style.left = '50%';
-            notification.style.transform = 'translate(-50%, -50%)';
-            notification.style.backgroundColor = 'rgba(0, 150, 0, 0.8)';
-            notification.style.color = 'white';
-            notification.style.padding = '20px';
-            notification.style.borderRadius = '10px';
-            notification.style.zIndex = '1000';
-            notification.textContent = 'Capture terminée！';
+            // ビフォー画像とアフター画像の取得
+            const beforeBestCapture = findBestCapture(beforeCapturesList);
+            const afterBestCapture = findBestCapture(afterCapturesList);
             
-            document.body.appendChild(notification);
+            // 動画ブロブの取得
+            let videoBlob = null;
+            if (recordedChunks.length > 0) {
+                const mimeType = mediaRecorder ? mediaRecorder.mimeType : 'video/webm';
+                videoBlob = new Blob(recordedChunks, { type: mimeType });
+            }
             
-            setTimeout(() => {
-                document.body.removeChild(notification);
-            }, 2000);
+            // APIにデータを送信 - sendDataToAPI関数内でformDataを作成するので、
+            // ここではformDataを直接操作しない
+            sendDataToAPI(beforeBestCapture.image, afterBestCapture.image, videoBlob).then(success => {
+                if (success) {
+                    // 成功時の通知は sendDataToAPI 内で処理
+                    console.log('データ送信成功');
+                }
+            });
         }
+
         // ウィンドウ読み込み時の初期化
         window.addEventListener('load', init);
+
+         // イベントリスナーを初期設定
+         document.addEventListener('DOMContentLoaded', function() {
+            // 必要なイベントリスナーを追加
+            document.getElementById('success-ok').addEventListener('click', function() {
+                document.getElementById('success-overlay').style.display = 'none';
+                document.getElementById('success-dialog').style.display = 'none';
+            });
+            
+            document.getElementById('error-ok').addEventListener('click', function() {
+                document.getElementById('error-overlay').style.display = 'none';
+                document.getElementById('error-dialog').style.display = 'none';
+            });
+        });
+
+        // シンプルにメッシュ表示と設定ボタンを非表示にする
+        document.addEventListener('DOMContentLoaded', function() {
+            // メッシュ表示ボタンを非表示
+            const meshButton = document.getElementById('toggle-mesh-btn');
+            if (meshButton) meshButton.style.display = 'none';
+            
+            // 設定表示ボタンを非表示
+            const settingsButton = document.getElementById('toggle-settings-btn');
+            if (settingsButton) settingsButton.style.display = 'none';
+        });
+
+        // iPad向けレイアウト最適化のための完全なスクリプト
+
+        // 即時実行関数で変数スコープを適切に管理
+        (function() {
+            // CSS定義を変数に格納
+            const ipadStyles = `
+            <style>
+                /* 全体のコンテナサイズ調整 */
+                body {
+                    overflow: auto;
+                    padding: 0;
+                    margin: 0;
+                    height: 100%;
+                    width: 100%;
+                    position: fixed;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                }
+                
+                .container {
+                    max-width: 100%;
+                    padding: 10px;
+                    margin: 0 auto;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    height: 100vh;
+                    box-sizing: border-box;
+                    overflow-y: auto;
+                    -webkit-overflow-scrolling: touch;
+                }
+                
+                /* ビデオコンテナを画面に合わせる */
+                .video-container {
+                    position: relative;
+                    width: 100%;
+                    max-width: 80%;
+                    height: 0;
+                    padding-bottom: 60%; /* アスペクト比を維持 */
+                    margin-bottom: 15px;
+                    overflow: hidden;
+                }
+                
+                #input-video {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    border-radius: 8px;
+                    background-color: #000;
+                }
+                
+                #output-canvas {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    border-radius: 8px;
+                    object-fit: cover;
+                }
+                
+                /* カウントダウン表示を中央に配置 */
+                .countdown-large {
+                    font-size: 48px;
+                    font-weight: bold;
+                    color: white;
+                    background-color: black;
+                    padding: 10px 30px;
+                    border-radius: 8px;
+                    text-align: center;
+                    margin-bottom: 15px;
+                    width: 180px;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 10;
+                    position: absolute;
+                    top: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                }
+                
+                /* ステータスパネルの調整 */
+                .status-panel {
+                    width: 100%;
+                    max-width: 80%;
+                    background-color: #fff;
+                    border-radius: 8px;
+                    padding: 12px;
+                    margin-bottom: 15px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
+                
+                .status-text {
+                    font-size: 16px;
+                    text-align: center;
+                    margin-bottom: 8px;
+                }
+                
+                .pose-info {
+                    font-size: 14px;
+                    text-align: center;
+                    margin-bottom: 8px;
+                }
+                
+                /* コントロールボタンの調整 */
+                .controls {
+                    display: flex;
+                    gap: 8px;
+                    margin-bottom: 15px;
+                    flex-wrap: wrap;
+                    justify-content: center;
+                    width: 100%;
+                    max-width: 80%;
+                }
+                
+                button {
+                    padding: 10px 15px;
+                    border-radius: 8px;
+                    border: none;
+                    background-color: #0066cc;
+                    color: white;
+                    font-size: 15px;
+                    cursor: pointer;
+                    min-width: 120px;
+                }
+                
+                /* ギャラリー表示の調整 */
+                .gallery {
+                    width: 100%;
+                    max-width: 80%;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 15px;
+                    margin-bottom: 20px;
+                }
+                
+                .gallery-item {
+                    background-color: #fff;
+                    border-radius: 8px;
+                    padding: 12px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }
+                
+                .captures-grid {
+                    display: block;
+                    max-width: 100%;
+                    margin: 0 auto;
+                }
+                
+                .capture-item {
+                    position: relative;
+                    border: 2px solid #f44336;
+                    border-radius: 4px;
+                    padding: 5px;
+                    margin: 0 auto;
+                    max-width: 250px;
+                }
+                
+                .capture-image {
+                    width: 100%;
+                    border-radius: 2px;
+                    display: block;
+                }
+                
+                /* ダイアログの調整 */
+                .email-dialog, .side-dialog, .dialog {
+                    max-width: 80%;
+                    width: 350px;
+                }
+                
+                /* オーバーレイの調整 */
+                .overlay {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-color: rgba(0,0,0,0.7);
+                    z-index: 1000;
+                }
+                
+                /* 録画動画表示の調整 */
+                .recorded-video {
+                    width: 100%;
+                    max-height: 300px;
+                    border-radius: 4px;
+                    display: block;
+                    margin: 0 auto;
+                }
+                
+                /* フォントサイズの全体的な調整 */
+                h3 {
+                    font-size: 18px;
+                    margin-top: 5px;
+                    margin-bottom: 10px;
+                }
+                
+                /* iPadの縦向きでも横向きでも見やすいように */
+                @media screen and (orientation: portrait) {
+                    /* 縦向き時のスタイル */
+                    .video-container {
+                        padding-bottom: 75%; /* より縦長に */
+                    }
+                }
+                
+                @media screen and (orientation: landscape) {
+                    /* 横向き時のスタイル */
+                    .container {
+                        flex-direction: row;
+                        flex-wrap: wrap;
+                        justify-content: center;
+                        align-items: flex-start;
+                    }
+                    
+                    .video-container {
+                        width: 60%;
+                        padding-bottom: 45%;
+                    }
+                    
+                    .status-panel, .controls, .gallery {
+                        width: 35%;
+                        max-width: 35%;
+                    }
+                }
+            </style>
+            `;
+
+            // 輪郭ガイドラインの調整関数
+            function adjustFaceOutline() {
+                // drawFaceOutline関数を修正
+                window.drawFaceOutline = function() {
+                    // 録画モード中は描画しない
+                    if (currentMode === MODE.RECORDING) {
+                        console.log('録画モード中は輪郭を描画しない');
+                        return;
+                    }
+                    
+                    // キャンバスの中央座標
+                    const centerX = outputCanvas.width / 2;
+                    const centerY = outputCanvas.height / 2;
+                    
+                    // iPad向けに調整された楕円のサイズ
+                    // 画面サイズに応じて適切なサイズを計算
+                    const screenMin = Math.min(outputCanvas.width, outputCanvas.height);
+                    
+                    // 楕円のサイズ（画面の小さい方の40%を横幅に、高さは縦長に）
+                    const outlineWidth = screenMin * 0.5; // 画面の40%
+                    const outlineHeight = screenMin * 0.8; // 画面の60%
+                    
+                    // 楕円を描画
+                    canvasCtx.beginPath();
+                    canvasCtx.ellipse(
+                        centerX, 
+                        centerY, 
+                        outlineWidth / 2, 
+                        outlineHeight / 2, 
+                        0, 
+                        0, 
+                        2 * Math.PI
+                    );
+                    canvasCtx.strokeStyle = 'rgba(255, 105, 180, 0.8)'; // ピンク色
+                    canvasCtx.lineWidth = 3;
+                    canvasCtx.stroke();
+                    
+                    console.log('輪郭ガイドを描画（モード:', currentMode, '）');
+                };
+            }
+
+            // ビデオとキャンバスのサイズ同期関数
+            function syncVideoAndCanvas() {
+                if (inputVideo && outputCanvas) {
+                    // ビデオがロードされたらキャンバスのサイズを合わせる
+                    outputCanvas.width = inputVideo.videoWidth || inputVideo.clientWidth;
+                    outputCanvas.height = inputVideo.videoHeight || inputVideo.clientHeight;
+                    
+                    console.log(`キャンバスサイズを同期: ${outputCanvas.width}x${outputCanvas.height}`);
+                }
+            }
+
+            // レイアウト最適化のための設定を追加する関数
+            function optimizeLayoutForIPad() {
+                // HTMLのhead要素にCSSを追加
+                document.head.insertAdjacentHTML('beforeend', ipadStyles);
+                
+                // 輪郭ガイドライン調整
+                adjustFaceOutline();
+                
+                // ビデオとキャンバスのサイズ同期を確保
+                window.addEventListener('resize', syncVideoAndCanvas);
+                
+                // ビデオのロード時とカメラ開始時にサイズを同期
+                if (inputVideo) {
+                    inputVideo.addEventListener('loadedmetadata', syncVideoAndCanvas);
+                }
+                
+                // 既存のカメラ開始関数を拡張
+                if (typeof window.startCamera === 'function') {
+                    const originalStartCamera = window.startCamera;
+                    window.startCamera = async function() {
+                        const success = await originalStartCamera();
+                        if (success) {
+                            // カメラ起動成功後、少し遅延させてサイズを同期
+                            setTimeout(syncVideoAndCanvas, 500);
+                        }
+                        return success;
+                    };
+                }
+                
+                console.log('iPadレイアウト最適化が適用されました');
+            }
+
+            // DOM要素が読み込まれたか確認してから実行
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', optimizeLayoutForIPad);
+            } else {
+                // DOMがすでに読み込まれている場合は直接実行
+                optimizeLayoutForIPad();
+            }
+        })();
     </script>
 </body>
 </html>
