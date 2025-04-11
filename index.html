@@ -2188,6 +2188,25 @@
                     background-color: rgba(0,0,0,0.7);
                     z-index: 1000;
                 }
+
+                /* Emailの表示位置とサイズ調整 */
+                .email-display {
+                    background-color: rgba(240, 240, 240, 0.7);
+                    padding: 3px 8px;
+                    border-radius: 4px;
+                    margin-top: 5px;
+                    font-size: 12px;
+                    position: fixed;
+                    top: 5px;
+                    right: 10%;
+                    z-index: 1000;
+                    cursor: pointer;
+                    border: 1px solid #ddd;
+                    max-width: 200px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
                 
                 /* 録画動画表示の調整 */
                 .recorded-video {
@@ -2235,7 +2254,7 @@
             </style>
             `;
 
-            // 輪郭ガイドラインの調整関数
+            // 輪郭ガイドラインの調整関数（横幅を広げる）
             function adjustFaceOutline() {
                 // drawFaceOutline関数を修正
                 window.drawFaceOutline = function() {
@@ -2250,12 +2269,11 @@
                     const centerY = outputCanvas.height / 2;
                     
                     // iPad向けに調整された楕円のサイズ
-                    // 画面サイズに応じて適切なサイズを計算
                     const screenMin = Math.min(outputCanvas.width, outputCanvas.height);
                     
-                    // 楕円のサイズ（画面の小さい方の40%を横幅に、高さは縦長に）
-                    const outlineWidth = screenMin * 0.5; // 画面の40%
-                    const outlineHeight = screenMin * 0.8; // 画面の60%
+                    // 楕円のサイズ - 横幅を広げる（50%に変更）、高さは縦長に（60%維持）
+                    const outlineWidth = screenMin * 0.5; // 画面の50%に広げる（元は40%）
+                    const outlineHeight = screenMin * 0.6; // 画面の60%維持
                     
                     // 楕円を描画
                     canvasCtx.beginPath();
@@ -2276,6 +2294,34 @@
                 };
             }
 
+            // Tangageのオフセット調整
+            function adjustTangageOffset() {
+                if (typeof window.calculateFacePose === 'function') {
+                    const originalCalculateFacePose = window.calculateFacePose;
+                    window.calculateFacePose = function(landmarks) {
+                        // 元の関数を呼び出す
+                        originalCalculateFacePose(landmarks);
+                        
+                        // iPadではピッチ（タンガージュ）に+10度のオフセットを適用
+                        facePose.pitch = facePose.pitch - 10;
+                    };
+                    console.log('Tangageのオフセット調整を適用しました');
+                }
+            }
+
+            // ボタンを非表示にする関数
+            function hideButtons() {
+                // メッシュ表示ボタンを非表示
+                const meshButton = document.getElementById('toggle-mesh-btn');
+                if (meshButton) meshButton.style.display = 'none';
+                
+                // 設定表示ボタンを非表示
+                const settingsButton = document.getElementById('toggle-settings-btn');
+                if (settingsButton) settingsButton.style.display = 'none';
+                
+                console.log('メッシュ表示と設定ボタンを非表示にしました');
+            }
+
             // ビデオとキャンバスのサイズ同期関数
             function syncVideoAndCanvas() {
                 if (inputVideo && outputCanvas) {
@@ -2294,6 +2340,12 @@
                 
                 // 輪郭ガイドライン調整
                 adjustFaceOutline();
+                
+                // Tangageのオフセット調整
+                adjustTangageOffset();
+                
+                // ボタンを非表示に
+                hideButtons();
                 
                 // ビデオとキャンバスのサイズ同期を確保
                 window.addEventListener('resize', syncVideoAndCanvas);
