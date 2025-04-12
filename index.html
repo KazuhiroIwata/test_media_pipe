@@ -547,8 +547,8 @@
                         </div>
                         <div class="threshold-control">
                             <label for="pitch-threshold">Tolérance tangage:</label>
-                            <input type="range" id="pitch-threshold" min="0" max="5" value="5.0" step="0.5">
-                            <span id="pitch-threshold-value">5.0°</span>
+                            <input type="range" id="pitch-threshold" min="0" max="8" value="8.0" step="0.5">
+                            <span id="pitch-threshold-value">8.0°</span>
                         </div>
                         <div class="threshold-control">
                             <label for="yaw-threshold">Tolérance lacet:</label>
@@ -715,7 +715,7 @@
         const PRODUCTION_TOTAL_TIME = 5 * 60; // 本番用：5分（300秒）
 
         // 現在使用する時間（デバッグ中はDEBUG_TOTAL_TIMEを使用）
-        const TOTAL_COUNTDOWN_TIME = DEBUG_TOTAL_TIME; // デバッグ時はこの行を使用
+        const TOTAL_COUNTDOWN_TIME = PRODUCTION_TOTAL_TIME; // デバッグ時はこの行を使用
         // const TOTAL_COUNTDOWN_TIME = PRODUCTION_TOTAL_TIME; // 本番時はこの行のコメントを外す
 
         // 録画開始タイミング（全体の時間から録画時間を引いた値）
@@ -733,7 +733,7 @@
 
         let currentEndpoint = 'developmentTokyo'; // 最初は開発環境（東京）
         let eventCode = 'EV-FR-2504-03'; // 本プログラム用
-        let apiKey = 'd3cb3239c140b79603487437e5b24664d79b8638d'; // 対応するAPIキー
+        let apiKey = 'd3cb3239c140b7960348743e5b24664d79b8638d'; // 対応するAPIキー
 
         // エンドポイントを切り替える関数
         function switchApiEndpoint(endpoint) {
@@ -1977,6 +1977,139 @@
             });
         }
 
+        // ビフォー画像に最も近いアフター画像を選択するロジックに変更
+
+        // 最も姿勢が近いアフター画像を見つける関数
+        function findSimilarToBeforeCapture(afterCapturesList) {
+            // ビフォーの最良キャプチャを取得（既存のロジックで選択されたもの）
+            const bestBeforeCapture = findBestCapture(beforeCapturesList);
+            
+            if (!bestBeforeCapture || afterCapturesList.length === 0) {
+                // データが不足している場合は既存の方法で選択
+                return findBestCapture(afterCapturesList);
+            }
+            
+            // ビフォー画像の姿勢（ピッチとヨー）
+            const beforePitch = bestBeforeCapture.pitch;
+            const beforeYaw = bestBeforeCapture.yaw;
+            
+            // 各アフター画像について、ビフォー画像との姿勢の違いを計算
+            let bestIndex = 0;
+            let minDifference = Number.MAX_VALUE;
+            
+            for (let i = 0; i < afterCapturesList.length; i++) {
+                const afterCapture = afterCapturesList[i];
+                // ピッチとヨーの差の二乗和の平方根（ユークリッド距離）を計算
+                const pitchDiff = afterCapture.pitch - beforePitch;
+                const yawDiff = afterCapture.yaw - beforeYaw;
+                const difference = Math.sqrt(pitchDiff * pitchDiff + yawDiff * yawDiff);
+                
+                console.log(`アフターキャプチャ ${i+1} の姿勢差: ${difference.toFixed(2)}°`);
+                
+                // より小さい差を持つキャプチャを見つけたら更新
+                if (difference < minDifference) {
+                    minDifference = difference;
+                    bestIndex = i;
+                }
+            }
+            
+            console.log(`ビフォーに最も近いアフター画像はインデックス ${bestIndex+1} です（姿勢差: ${minDifference.toFixed(2)}°）`);
+            
+            return afterCapturesList[bestIndex];
+        }
+
+        // captureAfterImage関数のアフター撮影完了部分を修正
+        // 既存の関数を保存
+        const originalCaptureAfterImage = window.captureAfterImage;
+
+        // 関数を上書き
+        window.captureAfterImage = function() {
+            // 元の関数がない場合（すでに上書きされている可能性）
+            if (typeof originalCaptureAfterImage !== 'function') {
+                console.error('元のcaptureAfterImage関数が見つかりません');
+                return;
+            }
+            
+            console.log('アフター画像キャプチャ開始');
+            // 姿勢が安定した状態をリセット
+            stablePosition = false;
+            
+            // 映像のみを一時的なキャンバスにコピー（既存コード）
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = outputCanvas.width;
+            tempCanvas.height = outputCanvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // 現在の映像のみを描画（ミラーリング状態を再現）
+            tempCtx.save();
+            tempCtx.scale(-1, 1);
+            tempCtx.translate(-tempCanvas.width, 0);
+            tempCtx.drawImage(inputVideo, 0, 0, tempCanvas.width, tempCanvas.height);
+            tempCtx.restore();
+            
+            // この一時キャンバスから画像を取得
+            const imageData = tempCanvas.toDataURL('image/jpeg');
+            
+            // 撮影情報を保存
+            const captureInfo = {
+                image: imageData,
+                pitch: facePose.pitch,
+                yaw: facePose.yaw,
+                timestamp: new Date().toLocaleTimeString(),
+                deviation: Math.abs(facePose.pitch) + Math.abs(facePose.yaw)
+            };
+            
+            afterCapturesList.push(captureInfo);
+            afterCapturesCount++;
+            
+            if (afterCapturesCount < 5) {
+                // 次の撮影に進む（既存の処理）
+                statusText.textContent = `Mode photo "après": Ajustez votre visage face à la caméra (${afterCapturesCount + 1}/5)`;
+                // 明示的にプログレスバーをリセット
+                progressFill.style.width = '0%';
+                // 安定時間を空けるために少し待機
+                setTimeout(() => {
+                    stableStartTime = null;
+                    console.log('次のアフターキャプチャの準備完了');
+                }, 500);
+            } else {
+                console.log('アフター撮影完了');
+                // 5枚撮影完了
+                statusText.textContent = 'Photos "après" terminées !';
+
+                // プログレスバーを明示的にリセット
+                progressFill.style.width = '0%';
+                stableStartTime = null;
+                stablePosition = false;
+
+                // 遅延をかけてから処理を続行
+                setTimeout(() => {
+                    // 【変更点】最もビフォーに近い画像を選択
+                    const bestCapture = findSimilarToBeforeCapture(afterCapturesList);
+                    
+                    // グリッドをクリアして最良の1枚だけを表示
+                    afterGrid.innerHTML = '';
+                    addCaptureToGrid(bestCapture, afterGrid, 1);
+                    afterCaptures.style.display = 'block';
+                    
+                    // すべて完了
+                    currentMode = MODE.COMPLETED;
+                    statusText.textContent = 'Terminé ! Vous pouvez comparer les photos avant/après';
+                    startBtn.textContent = 'Recommencer';
+                    
+                    // 施術部位選択ダイアログを表示（少し遅延をかける）
+                    setTimeout(() => {
+                        // この時点で施術部位選択ダイアログを表示
+                        document.getElementById('side-dialog-image').src = bestCapture.image;
+                        document.getElementById('side-dialog-overlay').style.display = 'block';
+                        document.getElementById('side-dialog').style.display = 'block';
+                    }, 500);
+                }, 1000);
+            }
+        };
+
+        console.log('アフター画像選択ロジックを、ビフォー画像に近いものを選ぶように変更しました');
+
         // ウィンドウ読み込み時の初期化
         window.addEventListener('load', init);
 
@@ -2272,8 +2405,8 @@
                     const screenMin = Math.min(outputCanvas.width, outputCanvas.height);
                     
                     // 楕円のサイズ - 横幅を広げる（50%に変更）、高さは縦長に（60%維持）
-                    const outlineWidth = screenMin * 0.7; // 画面の50%に広げる（元は40%）
-                    const outlineHeight = screenMin * 0.9; // 画面の60%維持
+                    const outlineWidth = screenMin * 0.4; // 画面の50%に広げる（元は40%）
+                    const outlineHeight = screenMin * 0.6; // 画面の60%維持
                     
                     // 楕円を描画
                     canvasCtx.beginPath();
