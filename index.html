@@ -715,7 +715,7 @@
         const PRODUCTION_TOTAL_TIME = 5 * 60; // 本番用：5分（300秒）
 
         // 現在使用する時間（デバッグ中はDEBUG_TOTAL_TIMEを使用）
-        const TOTAL_COUNTDOWN_TIME = PRODUCTION_TOTAL_TIME; // デバッグ時はこの行を使用
+        const TOTAL_COUNTDOWN_TIME = DEBUG_TOTAL_TIME; // デバッグ時はこの行を使用
         // const TOTAL_COUNTDOWN_TIME = PRODUCTION_TOTAL_TIME; // 本番時はこの行のコメントを外す
 
         // 録画開始タイミング（全体の時間から録画時間を引いた値）
@@ -731,7 +731,7 @@
             developmentTokyo: 'https://dev-api.face-matrix.com/event/report'
         };
 
-        let currentEndpoint = 'developmentTokyo'; // 最初は開発環境（東京）
+        let currentEndpoint = 'production'; //本番に変更
         let eventCode = 'EV-FR-2504-03'; // 本プログラム用
         let apiKey = 'd3cb3239c140b7960348743e5b24664d79b8638d'; // 対応するAPIキー
 
@@ -828,20 +828,20 @@
             formData.append('before_image', beforeImageBlob, 'before.jpg');
             formData.append('after_image', afterImageBlob, 'after.jpg');
             
-            let videoSize = 0;
-            if (videoBlob) {
-                videoSize = videoBlob.size;
-                console.log(`動画サイズ: ${Math.round(videoBlob.size / 1024 / 1024)} MB (${Math.round(videoBlob.size / 1024)} KB)`);
-                progress.textContent = 'Préparation de la vidéo...';
-                formData.append('movie', videoBlob, 'recording.webm');
-            }
+            // let videoSize = 0;
+            // if (videoBlob) {
+            //     videoSize = videoBlob.size;
+            //     console.log(`動画サイズ: ${Math.round(videoBlob.size / 1024 / 1024)} MB (${Math.round(videoBlob.size / 1024)} KB)`);
+            //     progress.textContent = 'Préparation de la vidéo...';
+            //     formData.append('movie', videoBlob, 'recording.webm');
+            // }
             
-            // FormDataの総サイズを計算
-            const totalSize = beforeImageBlob.size + afterImageBlob.size + videoSize;
-            console.log(`総送信データサイズ: ${Math.round(totalSize / 1024 / 1024)} MB (${Math.round(totalSize / 1024)} KB)`);
+            // // FormDataの総サイズを計算
+            // const totalSize = beforeImageBlob.size + afterImageBlob.size + videoSize;
+            // console.log(`総送信データサイズ: ${Math.round(totalSize / 1024 / 1024)} MB (${Math.round(totalSize / 1024)} KB)`);
             
             // 詳細なFormDataサイズをログ出力
-            console.log('--- 送信データ詳細 ---');
+            //console.log('--- 送信データ詳細 ---');
             let formDataTotalSize = 0;
             for (let [key, value] of formData.entries()) {
                 if (value instanceof Blob) {
