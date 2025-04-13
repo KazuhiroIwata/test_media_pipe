@@ -715,8 +715,8 @@
         const PRODUCTION_TOTAL_TIME = 5 * 60; // 本番用：5分（300秒）
 
         // 現在使用する時間（デバッグ中はDEBUG_TOTAL_TIMEを使用）
-        const TOTAL_COUNTDOWN_TIME = DEBUG_TOTAL_TIME; // デバッグ時はこの行を使用
-        // const TOTAL_COUNTDOWN_TIME = PRODUCTION_TOTAL_TIME; // 本番時はこの行のコメントを外す
+        // const TOTAL_COUNTDOWN_TIME = DEBUG_TOTAL_TIME; // デバッグ時はこの行を使用
+           const TOTAL_COUNTDOWN_TIME = PRODUCTION_TOTAL_TIME; // 本番時はこの行のコメントを外す
 
         // 録画開始タイミング（全体の時間から録画時間を引いた値）
         const RECORDING_START_TIME = 60; // 録画時間は1分（60秒）固定
