@@ -2513,21 +2513,20 @@
             }
         })();
 
-        // iPhone向けレイアウト調整
-        // 即時実行関数で変数スコープを適切に管理
+        // iPhone向けのすべてのレイアウト調整を統合
         (function() {
             // CSS定義を変数に格納
             const iphoneStyles = `
             <style>
-                /* iPhoneでのプレビュー枠をより縦長に */
+                /* iPhoneでのプレビュー枠をやや縦長に (ただし高すぎない) */
                 @media screen and (max-width: 480px) {
-                    /* ビデオコンテナを縦長に */
+                    /* ビデオコンテナを適度な縦長に */
                     .video-container {
                         position: relative;
                         width: 100%;
                         max-width: 100%;
                         height: 0;
-                        padding-bottom: 130%;
+                        padding-bottom: 120%; /* 縦横比を120%に調整 */
                         margin-bottom: 15px;
                         overflow: hidden;
                     }
@@ -2537,20 +2536,60 @@
                     #sending-dialog, #success-dialog, #error-dialog {
                         max-width: 90%;
                         width: 300px;
-                        top: 40%; /* 少し上に表示して下部のコントロールが見えるように */
+                        top: 40%;
                         max-height: 80vh;
-                        overflow-y: auto; /* 長い内容はスクロール可能に */
+                        overflow-y: auto;
                         font-size: 14px;
                     }
                     
-                    /* 小さな画面用にボタンサイズ最適化 */
+                    /* 左右選択ダイアログの調整 */
+                    .side-dialog {
+                        max-width: 90%;
+                        width: 300px;
+                        max-height: 85vh;
+                        overflow-y: auto;
+                        top: 45%;
+                    }
+                    
+                    /* 左右選択ダイアログの画像をより小さく */
+                    .side-image {
+                        width: 70%;
+                        max-width: 200px;
+                        height: auto;
+                        border-radius: 8px;
+                        margin-bottom: 8px;
+                    }
+                    
+                    /* 質問テキストを小さく */
+                    .side-question {
+                        font-size: 16px;
+                        margin-bottom: 15px;
+                    }
+                    
+                    /* ボタンのレイアウトを調整 */
+                    .side-buttons {
+                        flex-direction: row; /* 横並びに */
+                        flex-wrap: wrap;
+                        justify-content: space-around;
+                        gap: 10px;
+                        margin-bottom: 10px;
+                    }
+                    
+                    .side-button {
+                        padding: 10px;
+                        font-size: 16px;
+                        border-radius: 20px;
+                        min-width: 100px;
+                        flex: 0 0 auto; /* サイズ固定 */
+                    }
+                    
+                    /* 他の既存のスタイル調整（省略せずに含める） */
                     button {
                         padding: 8px 12px;
                         font-size: 14px;
                         min-width: 100px;
                     }
                     
-                    /* ステータステキストを小さく */
                     .status-text {
                         font-size: 14px;
                     }
@@ -2559,18 +2598,15 @@
                         font-size: 12px;
                     }
                     
-                    /* カウントダウン表示のサイズ調整 */
                     .countdown-large {
                         font-size: 36px;
                         width: 150px;
                     }
                     
-                    /* 録画ビデオのサイズ制限 */
                     .recorded-video {
                         max-height: 240px;
                     }
                     
-                    /* メールアドレス表示の位置とサイズ調整 */
                     .email-display {
                         font-size: 10px;
                         padding: 2px 6px;
@@ -2579,7 +2615,6 @@
                         max-width: 150px;
                     }
                     
-                    /* 入力ビデオを枠内に確実に収める */
                     #input-video, #output-canvas {
                         position: absolute;
                         top: 0;
@@ -2589,7 +2624,6 @@
                         object-fit: cover;
                     }
                     
-                    /* ギャラリーの調整 */
                     .gallery {
                         width: 100%;
                     }
@@ -2598,17 +2632,6 @@
                         max-width: 200px;
                     }
                     
-                    /* ダイアログボタンがはみ出ないように */
-                    .side-buttons {
-                        flex-direction: column;
-                        gap: 10px;
-                    }
-                    
-                    .side-button {
-                        width: 100%;
-                    }
-                    
-                    /* プライバシーポリシーコンテンツ */
                     .privacy-policy-content {
                         height: 150px;
                         font-size: 11px;
@@ -2621,7 +2644,7 @@
             function applyIphoneStyles() {
                 // スタイルをヘッドに追加
                 document.head.insertAdjacentHTML('beforeend', iphoneStyles);
-                console.log('iPhone向けレイアウト調整が適用されました');
+                console.log('iPhone向けレイアウト調整（すべて統合）が適用されました');
             }
 
             // DOM要素が読み込まれたか確認してから実行
