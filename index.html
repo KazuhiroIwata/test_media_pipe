@@ -2512,6 +2512,126 @@
                 optimizeLayoutForIPad();
             }
         })();
+
+        // iPhone向けレイアウト調整
+        // 即時実行関数で変数スコープを適切に管理
+        (function() {
+            // CSS定義を変数に格納
+            const iphoneStyles = `
+            <style>
+                /* iPhoneでのプレビュー枠をより縦長に */
+                @media screen and (max-width: 480px) {
+                    /* ビデオコンテナを縦長に */
+                    .video-container {
+                        position: relative;
+                        width: 100%;
+                        max-width: 100%;
+                        height: 0;
+                        padding-bottom: 150%; /* 縦横比 2:3 でより縦長に */
+                        margin-bottom: 15px;
+                        overflow: hidden;
+                    }
+                    
+                    /* ダイアログがスクリーンに収まるように */
+                    .email-dialog, .side-dialog, .dialog, 
+                    #sending-dialog, #success-dialog, #error-dialog {
+                        max-width: 90%;
+                        width: 300px;
+                        top: 40%; /* 少し上に表示して下部のコントロールが見えるように */
+                        max-height: 80vh;
+                        overflow-y: auto; /* 長い内容はスクロール可能に */
+                        font-size: 14px;
+                    }
+                    
+                    /* 小さな画面用にボタンサイズ最適化 */
+                    button {
+                        padding: 8px 12px;
+                        font-size: 14px;
+                        min-width: 100px;
+                    }
+                    
+                    /* ステータステキストを小さく */
+                    .status-text {
+                        font-size: 14px;
+                    }
+                    
+                    .pose-info {
+                        font-size: 12px;
+                    }
+                    
+                    /* カウントダウン表示のサイズ調整 */
+                    .countdown-large {
+                        font-size: 36px;
+                        width: 150px;
+                    }
+                    
+                    /* 録画ビデオのサイズ制限 */
+                    .recorded-video {
+                        max-height: 240px;
+                    }
+                    
+                    /* メールアドレス表示の位置とサイズ調整 */
+                    .email-display {
+                        font-size: 10px;
+                        padding: 2px 6px;
+                        top: 2px;
+                        right: 2px;
+                        max-width: 150px;
+                    }
+                    
+                    /* 入力ビデオを枠内に確実に収める */
+                    #input-video, #output-canvas {
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        object-fit: cover;
+                    }
+                    
+                    /* ギャラリーの調整 */
+                    .gallery {
+                        width: 100%;
+                    }
+                    
+                    .capture-item {
+                        max-width: 200px;
+                    }
+                    
+                    /* ダイアログボタンがはみ出ないように */
+                    .side-buttons {
+                        flex-direction: column;
+                        gap: 10px;
+                    }
+                    
+                    .side-button {
+                        width: 100%;
+                    }
+                    
+                    /* プライバシーポリシーコンテンツ */
+                    .privacy-policy-content {
+                        height: 150px;
+                        font-size: 11px;
+                    }
+                }
+            </style>
+            `;
+
+            // スタイルをドキュメントに追加
+            function applyIphoneStyles() {
+                // スタイルをヘッドに追加
+                document.head.insertAdjacentHTML('beforeend', iphoneStyles);
+                console.log('iPhone向けレイアウト調整が適用されました');
+            }
+
+            // DOM要素が読み込まれたか確認してから実行
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', applyIphoneStyles);
+            } else {
+                // DOMがすでに読み込まれている場合は直接実行
+                applyIphoneStyles();
+            }
+        })();
     </script>
 </body>
 </html>
