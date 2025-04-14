@@ -675,6 +675,13 @@
         const yawThresholdValue = document.getElementById('yaw-threshold-value');
         const stabilityTimeValue = document.getElementById('stability-time-value');
 
+        // 固定の閾値を定義
+        const FIXED_ROLL_THRESHOLD = 3.0;   // ロールの許容値（横傾き）
+        const FIXED_PITCH_THRESHOLD = 8.0;  // ピッチの許容値（縦傾き）
+        const FIXED_YAW_THRESHOLD = 1.0;    // ヨーの許容値（横向き）
+        const FIXED_STABILITY_TIME = 0.5;   // 安定時間（秒）
+
+
         // グローバル変数
         let currentMode = MODE.IDLE;
         let camera;
@@ -715,8 +722,8 @@
         const PRODUCTION_TOTAL_TIME = 5 * 60; // 本番用：5分（300秒）
 
         // 現在使用する時間（デバッグ中はDEBUG_TOTAL_TIMEを使用）
-           const TOTAL_COUNTDOWN_TIME = DEBUG_TOTAL_TIME; // デバッグ時はこの行を使用
-        //   const TOTAL_COUNTDOWN_TIME = PRODUCTION_TOTAL_TIME; // 本番時はこの行のコメントを外す
+        //   const TOTAL_COUNTDOWN_TIME = DEBUG_TOTAL_TIME; // デバッグ時はこの行を使用
+           const TOTAL_COUNTDOWN_TIME = PRODUCTION_TOTAL_TIME; // 本番時はこの行のコメントを外す
 
         // 録画開始タイミング（全体の時間から録画時間を引いた値）
         const RECORDING_START_TIME = 60; // 録画時間は1分（60秒）固定
@@ -731,7 +738,7 @@
             developmentTokyo: 'https://dev-api.face-matrix.com/event/report'
         };
 
-        let currentEndpoint = 'developmentTokyo'; //本番に変更
+        let currentEndpoint = 'production'; //本番に変更
         let eventCode = 'EV-FR-2504-03'; // 本プログラム用
         let apiKey = 'd3cb3239c140b7960348743e5b24664d79b8638d'; // 対応するAPIキー
 
@@ -800,99 +807,98 @@
         }
 
         // APIにデータを送信する関数を修正してサイズログを追加
-    async function sendDataToAPI(beforeImageData, afterImageData, videoBlob) {
-        // 送信中ダイアログを表示
-        const { statusText, progress } = showSendingDialog();
-        
-        try {
-            // メールアドレスが取得できなければエラー
-            if (!userEmail) {
-                throw new Error('Adresse e-mail non disponible');
-            }
+        async function sendDataToAPI(beforeImageData, afterImageData, videoBlob) {
+            // 送信中ダイアログを表示
+            const { statusText, progress } = showSendingDialog();
             
-            progress.textContent = 'Préparation des images...';
-            
-            // 画像をBlobに変換
-            const beforeImageBlob = await convertImageToBlob(beforeImageData);
-            console.log(`ビフォー画像サイズ: ${Math.round(beforeImageBlob.size / 1024)} KB`);
-            progress.textContent = 'Image "avant" prête...';
-            
-            const afterImageBlob = await convertImageToBlob(afterImageData);
-            console.log(`アフター画像サイズ: ${Math.round(afterImageBlob.size / 1024)} KB`);
-            progress.textContent = 'Image "après" prête...';
-            
-            // FormDataの作成
-            const formData = new FormData();
-            formData.append('email', userEmail);
-            formData.append('side', treatedSide); // left または right
-            formData.append('before_image', beforeImageBlob, 'before.jpg');
-            formData.append('after_image', afterImageBlob, 'after.jpg');
-            
-            let videoSize = 0;
-            if (videoBlob) {
-                videoSize = videoBlob.size;
-                console.log(`動画サイズ: ${Math.round(videoBlob.size / 1024 / 1024)} MB (${Math.round(videoBlob.size / 1024)} KB)`);
-                 progress.textContent = 'Préparation de la vidéo...';
-                 formData.append('movie', videoBlob, 'recording.webm');
-            }
-            
-            // // FormDataの総サイズを計算
-            // const totalSize = beforeImageBlob.size + afterImageBlob.size + videoSize;
-            // console.log(`総送信データサイズ: ${Math.round(totalSize / 1024 / 1024)} MB (${Math.round(totalSize / 1024)} KB)`);
-            
-            // 詳細なFormDataサイズをログ出力
-            //console.log('--- 送信データ詳細 ---');
-            let formDataTotalSize = 0;
-            for (let [key, value] of formData.entries()) {
-                if (value instanceof Blob) {
-                    formDataTotalSize += value.size;
-                    console.log(`${key}: ${Math.round(value.size / 1024)} KB`);
-                } else {
-                    console.log(`${key}: ${value}`);
+            try {
+                // メールアドレスが取得できなければエラー
+                if (!userEmail) {
+                    throw new Error('Adresse e-mail non disponible');
                 }
+                
+                progress.textContent = 'Préparation des images...';
+                
+                // 画像をBlobに変換
+                const beforeImageBlob = await convertImageToBlob(beforeImageData);
+                console.log(`ビフォー画像サイズ: ${Math.round(beforeImageBlob.size / 1024)} KB`);
+                progress.textContent = 'Image "avant" prête...';
+                
+                const afterImageBlob = await convertImageToBlob(afterImageData);
+                console.log(`アフター画像サイズ: ${Math.round(afterImageBlob.size / 1024)} KB`);
+                progress.textContent = 'Image "après" prête...';
+                
+                // FormDataの作成
+                const formData = new FormData();
+                formData.append('email', userEmail);
+                formData.append('side', treatedSide); // left または right
+                formData.append('before_image', beforeImageBlob, 'before.jpg');
+                formData.append('after_image', afterImageBlob, 'after.jpg');
+                
+                let videoSize = 0;
+                if (videoBlob) {
+                    videoSize = videoBlob.size;
+                    console.log(`動画サイズ: ${Math.round(videoBlob.size / 1024 / 1024)} MB (${Math.round(videoBlob.size / 1024)} KB)`);
+                    progress.textContent = 'Préparation de la vidéo...';
+                    formData.append('movie', videoBlob, 'recording.webm');
+                }
+                
+                // // FormDataの総サイズを計算
+                // const totalSize = beforeImageBlob.size + afterImageBlob.size + videoSize;
+                // console.log(`総送信データサイズ: ${Math.round(totalSize / 1024 / 1024)} MB (${Math.round(totalSize / 1024)} KB)`);
+                
+                // 詳細なFormDataサイズをログ出力
+                //console.log('--- 送信データ詳細 ---');
+                let formDataTotalSize = 0;
+                for (let [key, value] of formData.entries()) {
+                    if (value instanceof Blob) {
+                        formDataTotalSize += value.size;
+                        console.log(`${key}: ${Math.round(value.size / 1024)} KB`);
+                    } else {
+                        console.log(`${key}: ${value}`);
+                    }
+                }
+                console.log(`FormData総サイズ（概算）: ${Math.round(formDataTotalSize / 1024 / 1024)} MB (${Math.round(formDataTotalSize / 1024)} KB)`);
+                
+                // ヘッダー設定
+                const headers = {
+                    'X-Event-Code': eventCode,
+                    'X-Api-Auth-Key': apiKey
+                };
+                
+                // 現在のエンドポイントを取得
+                const endpoint = apiEndpoints[currentEndpoint];
+                
+                progress.textContent = 'Envoi des données au serveur...';
+                statusText.textContent = 'Envoi en cours...';
+                
+                // POSTリクエスト送信
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: headers,
+                    body: formData
+                });
+                
+                // レスポンスのJSONを解析
+                const result = await response.json();
+                
+                // 送信中ダイアログを閉じる
+                closeSendingDialog();
+                
+                // 成功・失敗の確認
+                if (response.ok && result.success) {
+                    showSuccessDialog();
+                    return true;
+                } else {
+                    throw new Error('Réponse du serveur: ' + JSON.stringify(result));
+                }
+            } catch (error) {
+                console.error('Error sending data to API:', error);
+                closeSendingDialog();
+                showErrorDialog(error.message);
+                return false;
             }
-            console.log(`FormData総サイズ（概算）: ${Math.round(formDataTotalSize / 1024 / 1024)} MB (${Math.round(formDataTotalSize / 1024)} KB)`);
-            
-            // ヘッダー設定
-            const headers = {
-                'X-Event-Code': eventCode,
-                'X-Api-Auth-Key': apiKey
-            };
-            
-            // 現在のエンドポイントを取得
-            const endpoint = apiEndpoints[currentEndpoint];
-            
-            progress.textContent = 'Envoi des données au serveur...';
-            statusText.textContent = 'Envoi en cours...';
-            
-            // POSTリクエスト送信
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: headers,
-                body: formData
-            });
-            
-            // レスポンスのJSONを解析
-            const result = await response.json();
-            
-            // 送信中ダイアログを閉じる
-            closeSendingDialog();
-            
-            // 成功・失敗の確認
-            if (response.ok && result.success) {
-                showSuccessDialog();
-                return true;
-            } else {
-                throw new Error('Réponse du serveur: ' + JSON.stringify(result));
-            }
-        } catch (error) {
-            console.error('Error sending data to API:', error);
-            closeSendingDialog();
-            showErrorDialog(error.message);
-            return false;
         }
-    }
-
 
         // 初期化
         function init() {
@@ -1581,9 +1587,8 @@
             canvasCtx.fill();
         }
         
-        // 正面向きチェック
+        // 正面向きチェック関数を修正
         function checkFrontFacing() {
-            console.log('現在のモード:', currentMode);
             // モードに基づいて処理をスキップする条件
             const skipCheck = 
                 currentMode === MODE.RECORDING || 
@@ -1591,10 +1596,6 @@
                 currentMode === MODE.AFTER_COMPLETED || 
                 currentMode === MODE.COMPLETED;
             
-            if (currentMode === MODE.AFTER) {
-                console.log('現在アフターモードです。輪郭表示が必要です'); // デバッグ用
-            }
-
             if (skipCheck) {
                 // 非アクティブモードではプログレスバーをクリア
                 if (progressFill.style.width !== '0%') {
@@ -1613,17 +1614,11 @@
                 return;
             }
             
-            // 現在のしきい値を取得（parseFloatを使用）
-            const rollThresholdVal = parseFloat(rollThreshold.value);
-            const pitchThresholdVal = parseFloat(pitchThreshold.value);
-            const yawThresholdVal = parseFloat(yawThreshold.value);
-            const stabilityTimeVal = parseFloat(stabilityTime.value);
-            
-            // 姿勢が正面条件を満たしているか確認
+            // 固定閾値を使用して姿勢が正面条件を満たしているか確認
             const isFrontFacing = 
-                Math.abs(facePose.roll) < rollThresholdVal &&
-                Math.abs(facePose.pitch) < pitchThresholdVal &&
-                Math.abs(facePose.yaw) < yawThresholdVal;
+                Math.abs(facePose.roll) < FIXED_ROLL_THRESHOLD &&
+                Math.abs(facePose.pitch) < FIXED_PITCH_THRESHOLD &&
+                Math.abs(facePose.yaw) < FIXED_YAW_THRESHOLD;
             
             // 条件に基づいてプログレスバーを更新
             if (isFrontFacing) {
@@ -1633,13 +1628,13 @@
                 }
                 
                 const elapsedTime = (Date.now() - stableStartTime) / 1000;
-                const progressPercent = (elapsedTime / stabilityTimeVal) * 100;
+                const progressPercent = (elapsedTime / FIXED_STABILITY_TIME) * 100;
                 const cappedProgress = Math.min(progressPercent, 100);
                 
                 progressFill.style.width = `${cappedProgress}%`;
                 
                 // 十分な時間、姿勢が安定していたらキャプチャ
-                if (elapsedTime >= stabilityTimeVal && !stablePosition) {
+                if (elapsedTime >= FIXED_STABILITY_TIME && !stablePosition) {
                     console.log('安定時間達成: キャプチャ実行');
                     stablePosition = true;
                     
@@ -1660,6 +1655,50 @@
                 }
             }
         }
+        
+        // スライダー要素の値を固定値で更新（表示のみ）
+        function updateThresholdValueDisplay() {
+            // スライダー要素がDOMに存在する場合のみ更新
+            if (rollThresholdValue) {
+                rollThresholdValue.textContent = `${FIXED_ROLL_THRESHOLD.toFixed(1)}°`;
+            }
+            if (pitchThresholdValue) {
+                pitchThresholdValue.textContent = `${FIXED_PITCH_THRESHOLD.toFixed(1)}°`;
+            }
+            if (yawThresholdValue) {
+                yawThresholdValue.textContent = `${FIXED_YAW_THRESHOLD.toFixed(1)}°`;
+            }
+            if (stabilityTimeValue) {
+                stabilityTimeValue.textContent = `${FIXED_STABILITY_TIME.toFixed(1)} sec`;
+            }
+            
+            // スライダー要素自体の値も設定（任意）
+            if (rollThreshold) rollThreshold.value = FIXED_ROLL_THRESHOLD;
+            if (pitchThreshold) pitchThreshold.value = FIXED_PITCH_THRESHOLD;
+            if (yawThreshold) yawThreshold.value = FIXED_YAW_THRESHOLD;
+            if (stabilityTime) stabilityTime.value = FIXED_STABILITY_TIME;
+        }
+
+        // 初期化時にスライダーイベントリスナーを修正
+        function initWithFixedThresholds() {
+            // もともとのスライダーイベントリスナーを無効化
+            if (rollThreshold) rollThreshold.removeEventListener('input', updateThresholdValue);
+            if (pitchThreshold) pitchThreshold.removeEventListener('input', updateThresholdValue);
+            if (yawThreshold) yawThreshold.removeEventListener('input', updateThresholdValue);
+            if (stabilityTime) stabilityTime.removeEventListener('input', updateThresholdValue);
+            
+            // スライダーを無効化（任意）
+            if (rollThreshold) rollThreshold.disabled = true;
+            if (pitchThreshold) pitchThreshold.disabled = true;
+            if (yawThreshold) yawThreshold.disabled = true;
+            if (stabilityTime) stabilityTime.disabled = true;
+            
+            // 固定値で表示を更新
+            updateThresholdValueDisplay();
+            
+            console.log('姿勢閾値を固定値に設定しました');
+        }
+
         // ビフォー画像の撮影
         function captureBeforeImage() {
             console.log('ビフォー画像キャプチャ開始');
@@ -2180,6 +2219,12 @@
 
         // シンプルにメッシュ表示と設定ボタンを非表示にする
         document.addEventListener('DOMContentLoaded', function() {
+            // 必要に応じて既存のupdateThresholdValue関数も上書き
+            window.updateThresholdValue = updateThresholdValueDisplay;
+    
+            // 固定値で初期化
+            initWithFixedThresholds();
+
             // メッシュ表示ボタンを非表示
             const meshButton = document.getElementById('toggle-mesh-btn');
             if (meshButton) meshButton.style.display = 'none';
