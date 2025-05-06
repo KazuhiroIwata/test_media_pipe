@@ -840,7 +840,18 @@
                     videoSize = videoBlob.size;
                     console.log(`動画サイズ: ${Math.round(videoBlob.size / 1024 / 1024)} MB (${Math.round(videoBlob.size / 1024)} KB)`);
                     progress.textContent = 'Préparation de la vidéo...';
-                    formData.append('movie', videoBlob, 'recording.webm');
+                    // MIME Type確認
+                    const mimeType = mediaRecorder ? mediaRecorder.mimeType : 'video/mp4';
+                    const isMP4 = mimeType.includes('mp4');
+            
+                    // 条件分岐で適切な拡張子を使用
+                    if (isMP4) {
+                        formData.append('movie', videoBlob, 'recording.mp4');
+                        console.log('MP4形式で動画を追加します');
+                    } else {
+                        formData.append('movie', videoBlob, 'recording.webm');
+                        console.log('WEBM形式で動画を追加します');
+                    }
                 }
                 
                 // // FormDataの総サイズを計算
@@ -1476,6 +1487,7 @@
         
         // 顔の姿勢計算
         function calculateFacePose(landmarks) {
+            
             // 特徴点の取得
             const nose = landmarks[1];
             const leftEye = landmarks[33];
@@ -1484,27 +1496,41 @@
             const rightMouth = landmarks[291];
             
             // ロール（Z軸回転）- 目の傾き - ミラーリング対応
-            const eyeDiffY = rightEye.y - leftEye.y; // 左右を入れ替え
-            const eyeDiffX = rightEye.x - leftEye.x; // 左右を入れ替え
-            facePose.roll = -Math.atan2(eyeDiffY, eyeDiffX) * 180 / Math.PI; // 符号を反転
+            const eyeDiffY = rightEye.y - leftEye.y;
+            const eyeDiffX = rightEye.x - leftEye.x;
+            facePose.roll = -Math.atan2(eyeDiffY, eyeDiffX) * 180 / Math.PI;
             
-            // ピッチ（X軸回転）- 縦方向の傾き
-            const mouthCenter = {
-                y: (leftMouth.y + rightMouth.y) / 2
-            };
+            // ピッチ（X軸回転）- 縦方向の傾き - 修正版
             const eyeCenter = {
-                y: (leftEye.y + rightEye.y) / 2
+                y: (leftEye.y + rightEye.y) / 2,
+                z: (leftEye.z + rightEye.z) / 2
             };
-            const eyeToMouthDist = mouthCenter.y - eyeCenter.y;
-            // 基準値を調整して正面時にゼロに近くなるように
-            facePose.pitch = (eyeToMouthDist - 0.22) * 150;
             
-            // ヨー（Y軸回転）- 横方向の向き - ミラーリング対応
+            // 鼻と目の中心の位置関係
+            const eyeNoseY = eyeCenter.y - nose.y;
+            const eyeNoseZ = eyeCenter.z - nose.z;
+            
+            // 角度計算 - 符号と引数を調整
+            let rawPitch = -Math.atan2(eyeNoseZ, eyeNoseY) * 180 / Math.PI;
+            
+            // 180度問題の解決
+            if (rawPitch > 90) {
+                rawPitch = rawPitch - 180;
+            } else if (rawPitch < -90) {
+                rawPitch = rawPitch + 180;
+            }
+            
+            // デバッグ用のログ
+            console.log("Raw pitch:", rawPitch);
+            
+            // 最終的なピッチ値（必要に応じてオフセットを調整）
+            facePose.pitch = rawPitch - 40; // テストに基づいて調整
+            
+            // ヨー（Y軸回転）- 横方向の向き
             const eyeMidPoint = {
                 x: (leftEye.x + rightEye.x) / 2
             };
-            const noseMidOffset = eyeMidPoint.x - nose.x; // ミラーリングに合わせて方向反転
-            // ミラーリングに合わせて符号を調整
+            const noseMidOffset = eyeMidPoint.x - nose.x;
             facePose.yaw = noseMidOffset * 500;
         }
         
@@ -1915,7 +1941,7 @@
             }
         }
 
-        // 録画開始
+        // 録画開始関数の修正
         function startRecording() {
             recordedChunks = [];
             
@@ -1927,17 +1953,18 @@
                 mediaRecorder = new MediaRecorder(stream, options);
             } catch (e1) {
                 try {
-                    // 次にwebm+vp8を試す
-                    options = { mimeType: 'video/webm;codecs=vp8,opus' };
+                    // 次にh264コーデックを試す（多くのブラウザで互換性がある）
+                    options = { mimeType: 'video/mp4; codecs=h264' };
                     mediaRecorder = new MediaRecorder(stream, options);
                 } catch (e2) {
                     try {
-                        // 最後にコーデック指定なしのwebmを試す
+                        // 最後にwebmにフォールバック
                         options = { mimeType: 'video/webm' };
                         mediaRecorder = new MediaRecorder(stream, options);
+                        console.warn('MP4がサポートされていないため、webmにフォールバックします');
                     } catch (e3) {
                         console.error('どの録画フォーマットもサポートされていません:', e3);
-                        statusText.textContent = '録画機能がサポートされていません';
+                        statusText.textContent = 'La fonction d\'enregistrement n\'est pas prise en charge';
                         return;
                     }
                 }
@@ -2053,8 +2080,18 @@
             // 動画ブロブの取得
             let videoBlob = null;
             if (recordedChunks.length > 0) {
-                const mimeType = mediaRecorder ? mediaRecorder.mimeType : 'video/webm';
-                videoBlob = new Blob(recordedChunks, { type: mimeType });
+                // MIMEタイプを取得
+                const mimeType = mediaRecorder ? mediaRecorder.mimeType : '';
+                
+                // 適切なMIMEタイプでBlobを作成
+                if (mimeType) {
+                    videoBlob = new Blob(recordedChunks, { type: mimeType });
+                    console.log(`動画形式: ${mimeType}`);
+                } else {
+                    // MIMEタイプが不明の場合はMP4と仮定
+                    videoBlob = new Blob(recordedChunks, { type: 'video/mp4' });
+                    console.log('MIMEタイプ不明: video/mp4と仮定します');
+                }
             }
             
             // APIにデータを送信 - sendDataToAPI関数内でformDataを作成するので、
