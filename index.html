@@ -568,6 +568,7 @@
         <div class="controls">
             <button id="start-btn" class="mode-button">1. Start "Before" Photo</button>
             <button id="preview-btn" class="mode-button" disabled>2. Start 5-Min Challenge</button>
+            <button id="after-btn" class="mode-button" disabled>3. Start "After" Photo</button>
             <!-- <button id="switch-camera-btn" disabled>カメラ切替</button>  -->
             <!-- <button id="manual-capture-btn" class="capture-button" disabled>手動キャプチャ</button> -->
             <button id="toggle-mesh-btn" class="small-button">メッシュ表示</button>
@@ -641,6 +642,7 @@
             BEFORE: 'before',
             BEFORE_COMPLETED: 'before_completed',
             RECORDING: 'recording',
+            RECORDING_COMPLETED: 'recording_completed',
             AFTER: 'after',
             AFTER_COMPLETED: 'after_completed',
             COMPLETED: 'completed'
@@ -655,6 +657,7 @@
         const progressFill = document.getElementById('progress-fill');
         const startBtn = document.getElementById('start-btn');
         const previewBtn = document.getElementById('preview-btn');
+        const afterBtn = document.getElementById('after-btn');
         //const switchCameraBtn = document.getElementById('switch-camera-btn');
         //const manualCaptureBtn = document.getElementById('manual-capture-btn');
         const beforeCaptures = document.getElementById('before-captures');
@@ -718,12 +721,12 @@
 
         // グローバル変数に追加または修正
         // デバッグ用の短い時間と本番用の時間を両方定義
-        const DEBUG_TOTAL_TIME = 70; // デバッグ用：70秒
+        const DEBUG_TOTAL_TIME = 65; // デバッグ用：70秒
         const PRODUCTION_TOTAL_TIME = 5 * 60; // 本番用：5分（300秒）
 
         // 現在使用する時間（デバッグ中はDEBUG_TOTAL_TIMEを使用）
-        //   const TOTAL_COUNTDOWN_TIME = DEBUG_TOTAL_TIME; // デバッグ時はこの行を使用
-           const TOTAL_COUNTDOWN_TIME = PRODUCTION_TOTAL_TIME; // 本番時はこの行のコメントを外す
+           const TOTAL_COUNTDOWN_TIME = DEBUG_TOTAL_TIME; // デバッグ時はこの行を使用
+        //   const TOTAL_COUNTDOWN_TIME = PRODUCTION_TOTAL_TIME; // 本番時はこの行のコメントを外す
 
         // 録画開始タイミング（全体の時間から録画時間を引いた値）
         const RECORDING_START_TIME = 60; // 録画時間は1分（60秒）固定
@@ -736,6 +739,25 @@
             production: 'https://paris-api.face-matrix.com/event/report',
             developmentParis: 'https://paris-api.dev.face-matrix.com/event/report',
             developmentTokyo: 'https://dev-api.face-matrix.com/event/report'
+        };
+
+        // 元のビデオコンテナスタイルを保存する変数
+        let originalVideoContainerStyle = {
+            width: '',
+            maxWidth: '',
+            height: '',
+            paddingBottom: '',
+            position: '',
+            margin: ''
+        };
+
+        // その他の要素の元のスタイルも保存
+        let originalControlsStyle = {
+            display: ''
+        };
+
+        let originalStatusPanelStyle = {
+            display: ''
         };
 
         let currentEndpoint = 'production'; //本番に変更
@@ -751,6 +773,147 @@
             }
             return false;
         }
+
+        // 動画撮影モード時にフルスクリーンプレビューに切り替える
+        function enableFullScreenPreview() {
+            const videoContainer = document.querySelector('.video-container');
+            const controls = document.querySelector('.controls');
+            const statusPanel = document.querySelector('.status-panel');
+            const countdownEl = document.getElementById('countdown');
+            
+            // 元のスタイルを保存
+            if (videoContainer) {
+                originalVideoContainerStyle.width = videoContainer.style.width;
+                originalVideoContainerStyle.maxWidth = videoContainer.style.maxWidth;
+                originalVideoContainerStyle.height = videoContainer.style.height;
+                originalVideoContainerStyle.paddingBottom = videoContainer.style.paddingBottom;
+                originalVideoContainerStyle.position = videoContainer.style.position;
+                originalVideoContainerStyle.margin = videoContainer.style.margin;
+                
+                // フルスクリーンスタイルを適用
+                videoContainer.style.position = 'fixed';
+                videoContainer.style.top = '0';
+                videoContainer.style.left = '0';
+                videoContainer.style.width = '100%';
+                videoContainer.style.height = '100%';
+                videoContainer.style.maxWidth = '100%';
+                videoContainer.style.paddingBottom = '0';
+                videoContainer.style.margin = '0';
+                videoContainer.style.zIndex = '10';
+                
+                // 動画要素自体も調整
+                const inputVideo = document.getElementById('input-video');
+                const outputCanvas = document.getElementById('output-canvas');
+                
+                if (inputVideo) {
+                    inputVideo.style.objectFit = 'cover';
+                    inputVideo.style.width = '100%';
+                    inputVideo.style.height = '100%';
+                }
+                
+                if (outputCanvas) {
+                    outputCanvas.style.objectFit = 'cover';
+                    outputCanvas.style.width = '100%';
+                    outputCanvas.style.height = '100%';
+                }
+            }
+            
+            // カウントダウン表示を調整（非表示にせず、位置だけ調整）
+            if (countdownEl) {
+                // カウントダウン表示を確実に表示
+                countdownEl.style.display = 'flex';
+                // 必要であれば位置を調整（元の表示スタイルを維持）
+                countdownEl.style.zIndex = '2000'; // 確実に前面に表示
+            }
+            
+            // コントロールパネルとステータスパネルを一時的に非表示
+            if (controls) {
+                originalControlsStyle.display = controls.style.display;
+                controls.style.display = 'none';
+            }
+            
+            if (statusPanel) {
+                originalStatusPanelStyle.display = statusPanel.style.display;
+                statusPanel.style.display = 'none';
+            }
+            
+            // ステータステキストをフルスクリーンでも見えるようにする
+            // 小さな半透明のステータス表示を画面上部に配置
+            const existingFloatingStatus = document.getElementById('floating-status');
+            if (!existingFloatingStatus) {
+                const floatingStatus = document.createElement('div');
+                floatingStatus.id = 'floating-status';
+                floatingStatus.style.position = 'fixed';
+                floatingStatus.style.top = '20px';
+                floatingStatus.style.left = '50%';
+                floatingStatus.style.transform = 'translateX(-50%)';
+                floatingStatus.style.background = 'rgba(0, 0, 0, 0.5)';
+                floatingStatus.style.color = 'white';
+                floatingStatus.style.padding = '8px 16px';
+                floatingStatus.style.borderRadius = '20px';
+                floatingStatus.style.fontSize = '14px';
+                floatingStatus.style.fontWeight = 'bold';
+                floatingStatus.style.zIndex = '2000';
+                floatingStatus.textContent = statusText.textContent;
+                document.body.appendChild(floatingStatus);
+            }
+            
+            console.log('フルスクリーンプレビューモードに切り替えました');
+        }
+
+        // 通常表示に戻す
+        function disableFullScreenPreview() {
+            const videoContainer = document.querySelector('.video-container');
+            const controls = document.querySelector('.controls');
+            const statusPanel = document.querySelector('.status-panel');
+            const countdownEl = document.getElementById('countdown');
+            
+            // 元のスタイルに戻す
+            if (videoContainer) {
+                videoContainer.style.width = originalVideoContainerStyle.width;
+                videoContainer.style.maxWidth = originalVideoContainerStyle.maxWidth;
+                videoContainer.style.height = originalVideoContainerStyle.height;
+                videoContainer.style.paddingBottom = originalVideoContainerStyle.paddingBottom;
+                videoContainer.style.position = originalVideoContainerStyle.position;
+                videoContainer.style.margin = originalVideoContainerStyle.margin;
+                videoContainer.style.zIndex = '';
+                
+                // 動画要素も元に戻す
+                const inputVideo = document.getElementById('input-video');
+                const outputCanvas = document.getElementById('output-canvas');
+                
+                if (inputVideo) {
+                    inputVideo.style.objectFit = '';
+                }
+                
+                if (outputCanvas) {
+                    inputVideo.style.objectFit = '';
+                }
+            }
+            
+            // カウントダウン表示を元に戻す
+            if (countdownEl) {
+                countdownEl.style.zIndex = '';
+            }
+            
+            // コントロールとステータスパネルを再表示
+            if (controls) {
+                controls.style.display = originalControlsStyle.display;
+            }
+            
+            if (statusPanel) {
+                statusPanel.style.display = originalStatusPanelStyle.display;
+            }
+            
+            // フローティングステータスがあれば削除
+            const floatingStatus = document.getElementById('floating-status');
+            if (floatingStatus) {
+                document.body.removeChild(floatingStatus);
+            }
+            
+            console.log('通常表示モードに戻しました');
+        }
+
 
         // 送信中ダイアログの表示
         function showSendingDialog() {
@@ -936,6 +1099,7 @@
             // ボタンイベントリスナー
             startBtn.addEventListener('click', startProcess);
             previewBtn.addEventListener('click', startPreview);
+            afterBtn.addEventListener('click', startAfterCapture);
             //switchCameraBtn.addEventListener('click', switchCamera);
             //manualCaptureBtn.addEventListener('click', manualCapture);
             
@@ -1069,7 +1233,7 @@
                 statusText.textContent = 'Mode photo "avant": Ajustez votre visage face à la caméra (1/5)';
                 startBtn.textContent = 'Annuler';
                 previewBtn.disabled = true;
-                //manualCaptureBtn.disabled = false;
+                afterBtn.disabled = true; // アフターボタンを無効化
                 
                 // 準備
                 beforeCapturesCount = 0;
@@ -1086,20 +1250,24 @@
                 // キャンセル処理
                 resetApp();
                 
-            } else if (currentMode === MODE.RECORDING) {
+            } else if (currentMode === MODE.RECORDING || currentMode === MODE.RECORDING_COMPLETED) {
                 // 録画停止
                 stopRecording();
                 stopCountdown();
                 hideRecordingNotification(); // もし録画開始通知があれば非表示
                 recordingStarted = false;
+
+                 // フルスクリーンプレビューモードを解除
+                disableFullScreenPreview();
                 
-                // ビフォー撮影完了状態に戻す（変更部分）
+                // ビフォー撮影完了状態に戻す
                 currentMode = MODE.BEFORE_COMPLETED;
                 statusText.textContent = 'Let\'s start the challenge! Tap "2. Start 5-Min Challenge".';
                 startBtn.textContent = 'Annuler';
-                previewBtn.disabled = false; // プレビュー（録画スタート）ボタンを有効化
+                previewBtn.disabled = false;
+                afterBtn.disabled = true; // アフターボタンを無効化
                 
-                // 青軸や輪郭を再表示（録画モードでは非表示になっていたため）
+                // 青軸や輪郭を再表示
                 showAxis = true;
                 
                 // ビフォー画像は引き続き表示
@@ -1146,12 +1314,43 @@
                 
                 // 青軸を明示的に非表示
                 showAxis = false;
+
+                // フルスクリーンプレビューモードに切り替え
+                enableFullScreenPreview();
                 
                 // カウントダウン開始
                 startCountdown();
                 
                 // 録画はカウントダウン内で開始される
                 recordingStarted = false;
+            }
+        }
+        // アフター撮影開始関数
+        function startAfterCapture() {
+            if (currentMode === MODE.RECORDING_COMPLETED) {
+                // アフターモードに移行
+                currentMode = MODE.AFTER;
+                statusText.textContent = 'Mode photo "après": Ajustez votre visage face à la caméra (1/5)';
+                startBtn.textContent = 'Annuler';
+                previewBtn.disabled = true;
+                afterBtn.disabled = true;
+                
+                // 準備
+                afterCapturesCount = 0;
+                afterCapturesList = [];
+                afterGrid.innerHTML = '';
+                afterCaptures.style.display = 'none';
+                
+                // 状態をリセット
+                progressFill.style.width = '0%';
+                stableStartTime = null;
+                stablePosition = false;
+                
+                // 青軸を表示
+                showAxis = true;
+                
+                // トースト通知を表示
+                showToast('Prenez des photos "après". Regardez droit devant.', 3000);
             }
         }
 
@@ -1177,29 +1376,24 @@
                     stopRecording();
                     hideRecordingNotification();
                     recordingStarted = false;
+
+                     // フルスクリーンプレビューモードを解除
+                    disableFullScreenPreview();
                     
-                    // アフターモードに移行
-                    currentMode = MODE.AFTER;
-                    statusText.textContent = 'Mode photo "après": Ajustez votre visage face à la caméra (1/5)';
+                    // アフターモードに移行する代わりに録画完了状態に
+                    currentMode = MODE.RECORDING_COMPLETED;
+                    statusText.textContent = 'Challenge completed! Tap "3. Start After Photo" to continue.';
                     startBtn.textContent = 'Annuler';
                     previewBtn.disabled = true;
+                    afterBtn.disabled = false; // アフターボタンを有効化
                     
                     // 青軸を再表示
                     showAxis = true;
-                    
-                    // 準備
-                    afterCapturesCount = 0;
-                    afterCapturesList = [];
-                    afterGrid.innerHTML = '';
-                    afterCaptures.style.display = 'none';
                     
                     // 状態をリセット
                     progressFill.style.width = '0%';
                     stableStartTime = null;
                     stablePosition = false;
-                    
-                    // トースト通知を表示（カウントダウン終了時のみ表示）
-                    showToast('Prenez des photos "après". Regardez droit devant.', 3000);
                 }
             }, 1000);
         }
@@ -1213,7 +1407,7 @@
             recordingStarted = false;
         }
 
-        // カウントダウン表示更新関数の修正
+        // カウントダウン表示更新関数（元のシンプルなバージョンに戻す）
         function updateCountdownDisplay() {
             const minutes = Math.floor(countdownTimeLeft / 60);
             const seconds = countdownTimeLeft % 60;
@@ -1235,6 +1429,12 @@
                 } else {
                     // 録画中
                     statusText.textContent = 'Mode vidéo: Enregistrement en cours !';
+                }
+                
+                // フローティングステータスがあれば更新
+                const floatingStatus = document.getElementById('floating-status');
+                if (floatingStatus) {
+                    floatingStatus.textContent = statusText.textContent;
                 }
             }
         }
@@ -1350,6 +1550,7 @@
     
             startBtn.textContent =   '1. Start "Before" Photo';
             previewBtn.disabled = true;
+            afterBtn.disabled = true;
             //switchCameraBtn.disabled = true;
             //manualCaptureBtn.disabled = true;
             
@@ -1790,6 +1991,7 @@
                 currentMode = MODE.BEFORE_COMPLETED;
                 statusText.textContent = 'Let\'s start the challenge! Tap "2. Start 5-Min Challenge".';
                 previewBtn.disabled = false;
+                afterBtn.disabled = true;
             }
         }
 
