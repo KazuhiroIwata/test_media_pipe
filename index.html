@@ -760,6 +760,16 @@
             display: ''
         };
 
+        // カウントダウン表示の元のスタイルを保存
+        let originalCountdownStyle = {
+            position: '',
+            bottom: '',
+            left: '',
+            transform: '',
+            zIndex: '',
+            display: ''
+        };
+
         let currentEndpoint = 'production'; //本番に変更
         let eventCode = 'EV-FR-2504-03'; // 本プログラム用
         let apiKey = 'd3cb3239c140b7960348743e5b24664d79b8638d'; // 対応するAPIキー
@@ -818,12 +828,25 @@
                 }
             }
             
-            // カウントダウン表示を調整（非表示にせず、位置だけ調整）
+            // カウントダウン表示を画面下部に移動
             if (countdownEl) {
-                // カウントダウン表示を確実に表示
+                // カウントダウン表示の元のスタイルを保存
+                originalCountdownStyle = {
+                    position: countdownEl.style.position,
+                    bottom: countdownEl.style.bottom,
+                    left: countdownEl.style.left,
+                    transform: countdownEl.style.transform,
+                    zIndex: countdownEl.style.zIndex,
+                    display: countdownEl.style.display
+                };
+                
+                // 画面下部に配置
+                countdownEl.style.position = 'fixed';
+                countdownEl.style.bottom = '50px';
+                countdownEl.style.left = '50%';
+                countdownEl.style.transform = 'translateX(-50%)';
+                countdownEl.style.zIndex = '2000';
                 countdownEl.style.display = 'flex';
-                // 必要であれば位置を調整（元の表示スタイルを維持）
-                countdownEl.style.zIndex = '2000'; // 確実に前面に表示
             }
             
             // コントロールパネルとステータスパネルを一時的に非表示
@@ -840,7 +863,7 @@
             // ステータステキストをフルスクリーンでも見えるようにする
             // 小さな半透明のステータス表示を画面上部に配置
             const existingFloatingStatus = document.getElementById('floating-status');
-            if (!existingFloatingStatus) {
+            /* if (!existingFloatingStatus) {
                 const floatingStatus = document.createElement('div');
                 floatingStatus.id = 'floating-status';
                 floatingStatus.style.position = 'fixed';
@@ -856,7 +879,7 @@
                 floatingStatus.style.zIndex = '2000';
                 floatingStatus.textContent = statusText.textContent;
                 document.body.appendChild(floatingStatus);
-            }
+            } */
             
             console.log('フルスクリーンプレビューモードに切り替えました');
         }
@@ -887,13 +910,18 @@
                 }
                 
                 if (outputCanvas) {
-                    inputVideo.style.objectFit = '';
+                    outputCanvas.style.objectFit = '';
                 }
             }
             
             // カウントダウン表示を元に戻す
-            if (countdownEl) {
-                countdownEl.style.zIndex = '';
+            if (countdownEl && originalCountdownStyle) {
+                countdownEl.style.position = originalCountdownStyle.position;
+                countdownEl.style.bottom = originalCountdownStyle.bottom;
+                countdownEl.style.left = originalCountdownStyle.left;
+                countdownEl.style.transform = originalCountdownStyle.transform;
+                countdownEl.style.zIndex = originalCountdownStyle.zIndex;
+                countdownEl.style.display = originalCountdownStyle.display;
             }
             
             // コントロールとステータスパネルを再表示
@@ -1358,6 +1386,19 @@
         function startCountdown() {
             countdownTimeLeft = TOTAL_COUNTDOWN_TIME; // 設定した時間を使用
             updateCountdownDisplay();
+            
+            // ここでカウントダウン要素の位置を調整
+            const countdownEl = document.getElementById('countdown');
+            countdownEl.style.position = 'fixed';
+            countdownEl.style.bottom = '50px';
+            countdownEl.style.top = 'auto'; // top位置をリセット
+            countdownEl.style.left = '50%';
+            countdownEl.style.transform = 'translateX(-50%)';
+            countdownEl.style.zIndex = '2000';
+            
+            // 表示を確実に
+            countdownEl.style.display = 'flex';
+            
             document.getElementById('countdown').style.display = 'flex';
             
             countdownInterval = setInterval(() => {
@@ -1376,16 +1417,19 @@
                     stopRecording();
                     hideRecordingNotification();
                     recordingStarted = false;
-
-                     // フルスクリーンプレビューモードを解除
+                    
+                    // フルスクリーンプレビューモードを解除
                     disableFullScreenPreview();
                     
-                    // アフターモードに移行する代わりに録画完了状態に
+                    // 録画完了状態に移行
                     currentMode = MODE.RECORDING_COMPLETED;
                     statusText.textContent = 'Challenge completed! Tap "3. Start After Photo" to continue.';
                     startBtn.textContent = 'Annuler';
                     previewBtn.disabled = true;
                     afterBtn.disabled = false; // アフターボタンを有効化
+                    
+                    // 動画キャプチャセクションを表示
+                    videoCapture.style.display = 'block';
                     
                     // 青軸を再表示
                     showAxis = true;
@@ -1397,10 +1441,20 @@
                 }
             }, 1000);
         }
-
-        // カウントダウン停止時に録画関連の状態をクリア
         function stopCountdown() {
             clearInterval(countdownInterval);
+            
+            // カウントダウン要素の位置を元に戻す
+            const countdownEl = document.getElementById('countdown');
+            if (countdownEl) {
+                countdownEl.style.position = '';
+                countdownEl.style.bottom = '';
+                countdownEl.style.top = '';
+                countdownEl.style.left = '';
+                countdownEl.style.transform = '';
+                countdownEl.style.zIndex = '';
+            }
+            
             document.getElementById('countdown').style.display = 'none';
             
             // 録画状態もリセット
